@@ -30,7 +30,7 @@ interface OFWRecord {
   contractExpiry?: string;
 }
 
-export function OFWProfiling() {
+export default function OFWProfiling() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

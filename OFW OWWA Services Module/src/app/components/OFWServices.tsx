@@ -2,7 +2,7 @@ import { LayoutDashboard, Users, Building2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { useState } from "react";
 import { OFWServicesDashboard } from "./OFWServicesDashboard";
-import { OFWProfiling } from "./OFWProfilingEnhanced";
+import OFWProfilingEnhanced from "./OFWProfilingEnhanced";
 import { OWWAOfficerOrganization } from "./OWWAOfficerOrganizationEnhanced";
 
 export function OFWServices() {
@@ -19,7 +19,7 @@ export function OFWServices() {
       case "dashboard":
         return <OFWServicesDashboard />;
       case "ofw-profiling":
-        return <OFWProfiling />;
+        return <OFWProfilingEnhanced />;
       case "owwa-officers":
         return <OWWAOfficerOrganization />;
       default:

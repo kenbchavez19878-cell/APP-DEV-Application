@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
   # MSWD-PMS
 
@@ -9,3 +10,6 @@
 
   Run `npm run dev` to start the development server.
   
+=======
+# mswd-program-management-system
+>>>>>>> f6cb7fac019c19e94e3720c57cfc985f178815a0
