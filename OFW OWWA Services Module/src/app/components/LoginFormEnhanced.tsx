@@ -4,6 +4,7 @@ import { Eye, EyeOff, ChevronDown, X, Mail, Phone, MessageCircle } from "lucide-
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import axios from "../../api/clientApi";
 
 interface LoginFormProps {
   onLogin: (role: string) => void;
@@ -44,7 +45,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -53,19 +54,41 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
     setIsLoading(true);
 
-    // Simulate API call
+    // Make actual API call to Django backend
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
+      const response = await axios.post('http://localhost:8000/api/auth/login/', {
+        username: username,
+        password: password
+      });
+
+      // Store the token in localStorage for future requests
+      localStorage.setItem('access', response.data.key);
+
       toast.success("Login successful!", {
         description: `Welcome back! Logged in as ${role}`,
       });
       
       // Navigate to dashboard
       onLogin(role);
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Login error:', error);
+      let errorMessage = "Please check your credentials and try again.";
+      
+      if (error.response && error.response.data) {
+        // Handle Django REST framework error format
+        if (error.response.data.detail) {
+          errorMessage = error.response.data.detail;
+        } else if (error.response.data.non_field_errors) {
+          errorMessage = error.response.data.non_field_errors[0];
+        } else {
+          errorMessage = JSON.stringify(error.response.data);
+        }
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
       toast.error("Login failed", {
-        description: "Please check your credentials and try again.",
+        description: errorMessage,
       });
       setIsLoading(false);
     }

@@ -40,11 +40,54 @@ INSTALLED_APPS = [
     
     # API Framework Utilities
     'rest_framework',
+    'rest_framework.authtoken',  # Required for dj-rest-auth
     'corsheaders',
+    
+    # Authentication (allauth & dj-rest-auth)
+    'dj_rest_auth',
+    'dj_rest_auth.registration',
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
     
     # Your custom profile application
     'core_profiles',
 ]
+
+# Authentication backends
+AUTHENTICATION_BACKENDS = [
+    'django.contrib.auth.backends.ModelBackend',
+    'allauth.account.auth_backends.AuthenticationBackend',
+]
+
+# Site ID (required for allauth)
+SITE_ID = 1
+
+# Django REST Framework configuration
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+}
+
+# dj-rest-auth settings
+REST_USE_JWT = False  # Using token authentication instead of JWT for simplicity
+OLD_PASSWORD_FIELD_ENABLED = True
+LOGOUT_ON_PASSWORD_CHANGE = False
+
+# allauth settings
+ACCOUNT_EMAIL_REQUIRED = False
+ACCOUNT_USERNAME_REQUIRED = True
+ACCOUNT_AUTHENTICATION_METHOD = 'username'
+ACCOUNT_EMAIL_VERIFICATION = 'none'
+ACCOUNT_CONFIRM_EMAIL_ON_GET = True
+ACCOUNT_EMAIL_CONFIRMATION_EXPIRE_DAYS = 1
+ACCOUNT_LOGIN_ATTEMPTS_LIMIT = 5
+ACCOUNT_LOGIN_ATTEMPTS_TIMEOUT = 300
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',  # Our custom API header line
@@ -55,6 +98,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',  # Restored!
     'django.contrib.messages.middleware.MessageMiddleware',      # Restored!
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    # allauth
+    "allauth.account.middleware.AccountMiddleware",
 ]
 
 ROOT_URLCONF = 'mswd_backend.urls'
