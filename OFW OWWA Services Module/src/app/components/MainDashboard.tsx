@@ -65,7 +65,7 @@ export function MainDashboard() {
             Dashboard
           </h1>
           <p className="text-[15px] text-[#6b7280]">
-            Welcome back, let's manage your jurisdiction • {new Date().toLocaleDateString()}
+            Welcome back, let's manage your jurisdiction - {new Date().toLocaleDateString()}
           </p>
         </div>
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -14,6 +14,7 @@ import {
 } from "./AssistanceFormComponents";
 import { toast } from "sonner";
 import { ClientSearchWidget } from "./ClientSearchWidget";
+import { getProfilingData, saveClientProfile } from "../../api/clientApi";
 
 interface OFWRecord {
   id: string;
@@ -39,7 +40,7 @@ export default function OFWProfiling() {
   const [countryFilter, setCountryFilter] = useState("all");
   const [selectedOFW, setSelectedOFW] = useState<OFWRecord | null>(null);
 
-  // Form state
+   // Form state
   const [formData, setFormData] = useState({
     // Personal Information
     lastName: "",
@@ -98,89 +99,99 @@ export default function OFWProfiling() {
     notes: ""
   });
 
-  const ofws: OFWRecord[] = [
-    {
-      id: "OFW-2024-001",
-      name: "Maria dela Cruz",
-      profileType: "Individual Profile",
-      country: "Saudi Arabia",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "MD",
-      agency: "ABC Recruitment Agency",
-      occupation: "Domestic Helper",
-      contractExpiry: "Dec 31, 2024"
-    },
-    {
-      id: "OFW-2024-002",
-      name: "Jose Rizal",
-      profileType: "Individual Profile",
-      country: "Singapore",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Repatriated",
-      statusColor: "bg-blue-100 text-blue-700",
-      avatar: "JR",
-      agency: "XYZ Agency",
-      occupation: "Construction Worker"
-    },
-    {
-      id: "OFW-2024-003",
-      name: "Gabriela Silang",
-      profileType: "Individual Profile",
-      country: "Hong Kong",
-      workerType: "Land-based",
-      owwaStatus: "Expired",
-      status: "Distressed",
-      statusColor: "bg-yellow-100 text-yellow-700",
-      avatar: "GS",
-      agency: "DEF Placement",
-      occupation: "Caregiver"
-    },
-    {
-      id: "OFW-2024-004",
-      name: "Andres Bonifacio",
-      profileType: "Individual Profile",
-      country: "International Waters",
-      workerType: "Sea-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "AB",
-      agency: "Maritime Services Corp",
-      occupation: "Seaman",
-      contractExpiry: "Jun 15, 2025"
-    },
-    {
-      id: "OFW-2024-005",
-      name: "Teresa Magbanua",
-      profileType: "Individual Profile",
-      country: "United Arab Emirates",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "TM",
-      agency: "Gulf Careers Inc",
-      occupation: "Nurse",
-      contractExpiry: "Mar 20, 2025"
-    },
-    {
-      id: "OFW-2024-006",
-      name: "Melchora Aquino",
-      profileType: "Individual Profile",
-      country: "Qatar",
-      workerType: "Land-based",
-      owwaStatus: "Expired",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "MA",
-      agency: "Middle East Staffing",
-      occupation: "Hotel Staff"
+  // ── Scroll-lock refs: keep the main list's scroll position stable
+  //    across all modal open/close transitions so the page never "jumps to top".
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef(0);
+  const isModalOpenRef = useRef(false);
+
+  // Capture scroll top whenever the scroll container is about to lose focus
+  // (i.e. a modal is opening) and restore it when the modal closes.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      // Only capture when a modal is NOT open — if a modal IS open we never
+      // want to update the saved position from background scroll.
+      if (!isModalOpenRef.current) {
+        savedScrollTopRef.current = container.scrollTop;
+      }
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Watch for modal state changes: capture on open, restore on close.
+  // useLayoutEffect runs BEFORE paint so the restore is visible with zero flicker.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const prevOpen = isModalOpenRef.current;
+    isModalOpenRef.current = showAddForm || showProfileDetails;
+
+    if (isModalOpenRef.current && !prevOpen) {
+      // Modal just opened — save the current scroll position before anything
+      // else in this render pass can shift the container.
+      savedScrollTopRef.current = container.scrollTop;
+    } else if (!isModalOpenRef.current && prevOpen) {
+      // Modal just closed — restore the scroll to the saved position.
+      requestAnimationFrame(() => {
+        container.scrollTop = savedScrollTopRef.current;
+      });
     }
-  ];
+    // Run once at mount so we pick up whatever scroll the page landed at.
+    if (!prevOpen) savedScrollTopRef.current = container.scrollTop;
+  }, [showAddForm, showProfileDetails]);
+
+  // Live OFW data from backend
+  const [ofws, setOfws] = useState<OFWRecord[]>([]);
+  const [ofwsLoading, setOfwsLoading] = useState(true);
+
+  // Helpers – keep DRY and consistent across load + submit flows
+  const mapBackend = (r: any): OFWRecord => ({
+    id: String(r.client_id || r.id),
+    name: `${r.last_name || ""}, ${r.first_name || ""}`.trim() || "—",
+    profileType: "Individual Profile",
+    country: r.country_of_deployment || r.country || "—",
+    workerType: (r.worker_type === "Sea-based" ? "Sea-based" : "Land-based") as "Land-based" | "Sea-based",
+    owwaStatus: (r.owwa_membership_status === "Active" ? "Active"
+      : r.owwa_membership_status === "Expired" ? "Expired"
+      : "N/A") as "Active" | "Expired" | "N/A",
+    status: "Active",
+    statusColor: "bg-green-100 text-green-700",
+    avatar: ((r as any).first_name?.[0] || "O") + ((r as any).last_name?.[0] || "F"),
+    agency: r.recruitment_agency || r.agency || undefined,
+    occupation: r.occupation_position || r.occupation || undefined,
+    contractExpiry: undefined,
+  });
+
+  const loadOFWs = async () => {
+    setOfwsLoading(true);
+    try {
+      const res: any = await getProfilingData();
+      // Axios response = { data: [...] } or { count, results: [...] } from
+      // Django REST Framework pagination – support both shapes.
+      const raw = (res as any)?.data
+        ?? ((res as any)?.results ?? [])
+        ?? [];
+      if (Array.isArray(raw) && raw.length > 0) {
+        setOfws(raw.map(mapBackend));
+      } else {
+        setOfws([]);
+      }
+    } catch (e) {
+      console.error("Failed to load OFW records:", e);
+      setOfws([]);
+    } finally {
+      setOfwsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOFWs();
+  }, []);
 
   const filteredOFWs = ofws.filter(ofw => {
     const matchesSearch = 
@@ -218,11 +229,95 @@ export default function OFWProfiling() {
     toast.success("Draft saved successfully!");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting OFW profile...", formData);
-    toast.success("OFW profile created successfully!");
-    setShowAddForm(false);
+    console.log("[handleSubmit] fired — formData:", formData);
+
+    // Guard: required fields
+    if (!formData.firstName?.trim() || !formData.lastName?.trim()) {
+      toast.error("First Name and Last Name are required.");
+      return;
+    }
+    if (!formData.workerType) {
+      toast.error("Worker Type is required.");
+      return;
+    }
+    if (!formData.country?.trim()) {
+      toast.error("Country of Deployment is required.");
+      return;
+    }
+    if (!formData.occupation?.trim()) {
+      toast.error("Occupation/Position is required.");
+      return;
+    }
+    if (!formData.agency?.trim()) {
+      toast.error("Recruitment Agency is required.");
+      return;
+    }
+    if (!formData.emergencyContactName?.trim()) {
+      toast.error("Emergency Contact Name is required.");
+      return;
+    }
+    if (!formData.emergencyRelationship) {
+      toast.error("Emergency Contact Relationship is required.");
+      return;
+    }
+    if (!formData.emergencyContactNumber?.trim()) {
+      toast.error("Emergency Contact Number is required.");
+      return;
+    }
+
+    try {
+      const initials = `${(formData.firstName?.[0] || "O")}${(formData.lastName?.[0] || "F")}`.toUpperCase();
+      const clientId = `${initials}-${Date.now()}`;
+
+      // Map frontend dropdown values (lowercase-with-hyphens) → Django COUNTRY_CHOICES labels
+      const fCountry = formData.country || "";
+      const countryMap: Record<string, string> = {
+        "saudi-arabia": "Saudi Arabia",
+        "uae": "UAE",
+        "hong-kong": "Hong Kong",
+        "singapore": "Singapore",
+        "qatar": "Qatar",
+        "international-waters": "International Waters",
+        "others": "Others",
+      };
+      const countryOfDeployment = countryMap[fCountry] || formData.country || "Others";
+
+      const workerType = formData.workerType === "sea-based" ? "Sea-based" : "Land-based";
+      const owwaStatus = formData.owwaMembershipStatus === "active" ? "Active"
+        : formData.owwaMembershipStatus === "expired" ? "Expired"
+        : formData.owwaMembershipStatus === "not-member" ? "Not a Member"
+        : "";
+
+      const payload = {
+        client_id: clientId,
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
+        worker_type: workerType,
+        country_of_deployment: countryOfDeployment,
+        occupation_position: formData.occupation.trim(),
+        recruitment_agency: formData.agency.trim(),
+        owwa_membership_status: owwaStatus,
+        emergency_contact_name: formData.emergencyContactName.trim(),
+        relationship: formData.emergencyRelationship || "Others",
+        emergency_contact_number: formData.emergencyContactNumber.trim(),
+      };
+
+      console.log("[handleSubmit] posting payload:", payload);
+      const result: any = await saveClientProfile(payload);
+      console.log("[handleSubmit] POST ok — result:", result?.data ?? result);
+      toast.success("OFW profile created successfully!");
+      // Reset form AFTER save so user can see success before fields clear
+      setShowAddForm(false);
+      await loadOFWs();
+      console.log("[handleSubmit] post-save refresh complete — ofws:", ofws.length);
+    } catch (err: any) {
+      const status = err?.response?.status ?? "network";
+      const detail = JSON.stringify(err?.response?.data ?? err.message);
+      console.error("[handleSubmit] FAILED — status:", status, "body:", detail);
+      toast.error(`Save failed (HTTP ${status}). Check console for details.`);
+    }
   };
 
   // Profile Details View - Modal Design
@@ -686,7 +781,7 @@ export default function OFWProfiling() {
                 Save Draft
               </Button>
               <Button
-                type="submit"
+                type="button"
                 onClick={handleSubmit}
                 className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white gap-2 transition-colors"
               >
@@ -706,7 +801,7 @@ export default function OFWProfiling() {
 
   // Main List View
   return (
-    <div className="h-full bg-gray-50 overflow-y-auto">
+    <div className="h-full bg-gray-50 overflow-y-auto" ref={scrollContainerRef}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 space-y-4">
         {/* Search and Filters - Simplified without More Filters */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">

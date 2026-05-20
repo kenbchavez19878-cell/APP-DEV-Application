@@ -75,8 +75,11 @@ export default function OFWProfiling() {
     try {
       setLoading(true);
       if (typeof getProfilingData === 'function') {
-        const response = await getProfilingData();
-        setRecords(response?.data || response || []);
+        const response: any = await getProfilingData();
+        // DRF may return {count, results: [...]} when pagination is enabled.
+        // axios wraps the body in .data; a bare array is also supported.
+        const raw = response?.data ?? response?.results ?? response ?? [];
+        setRecords(Array.isArray(raw) ? raw : []);
       } else {
         const res = await fetch('/api/ofw-registrations/');
         const data = await res.json();
@@ -97,11 +100,35 @@ export default function OFWProfiling() {
   const onSubmitForm = async (data: FormInputs) => {
     try {
       setSubmitting(true);
-      
+
+      const initials = `${(data.firstName?.[0] || "O")}${(data.lastName?.[0] || "F")}`.toUpperCase();
+      const clientId = `${initials}-${Date.now()}`;
+
+      // Map camelCase form fields → snake_case Django model fields
+      const workerType = data.workerType === 'sea-based' ? 'Sea-based' : 'Land-based';
+      const owwaStatus = data.owwaMembershipStatus === 'expired' ? 'Expired'
+        : data.owwaMembershipStatus === 'active' ? 'Active'
+        : 'Not a Member';
+
+      const payload = {
+        client_id: clientId,
+        first_name: data.firstName || "",
+        last_name: data.lastName || "",
+        middle_name: data.middleName || "",
+        worker_type: workerType,
+        country_of_deployment: data.country || "",
+        occupation_position: data.occupation || "",
+        recruitment_agency: data.agency || "",
+        owwa_membership_status: owwaStatus,
+        emergency_contact_name: data.emergencyContactName || "",
+        relationship: (data as any).relationship || "Others",
+        emergency_contact_number: data.emergencyContactNumber || "",
+      };
+
       const response = await fetch('/api/ofw-registrations/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload),
       });
 
       if (response.ok) {
@@ -110,6 +137,8 @@ export default function OFWProfiling() {
         reset();
         fetchRecords();
       } else {
+        const errBody = await response.json().catch(() => ({}));
+        console.error('Backend error:', errBody);
         throw new Error('Failed saving data backend server');
       }
     } catch (error) {

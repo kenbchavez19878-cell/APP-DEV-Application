@@ -3,7 +3,11 @@ from django.db import models
 class OFWRegistration(models.Model):
     # Core Identification
     client_id = models.CharField(max_length=50, unique=True, primary_key=True)
-    
+
+    # Personal Name Data
+    first_name = models.CharField(max_length=100, default="")
+    last_name = models.CharField(max_length=100, default="")
+
     # Employment Details Data
     WORKER_TYPE_CHOICES = [
         ('Land-based', 'Land-based OFW'),
@@ -22,7 +26,7 @@ class OFWRegistration(models.Model):
     country_of_deployment = models.CharField(max_length=50, choices=COUNTRY_CHOICES)
     occupation_position = models.CharField(max_length=100)
     recruitment_agency = models.CharField(max_length=150)
-    
+
     # OWWA Membership Status Data
     MEMBERSHIP_STATUS_CHOICES = [
         ('Active', 'Active Member'),
@@ -30,7 +34,7 @@ class OFWRegistration(models.Model):
         ('Not a Member', 'Not a Member'),
     ]
     owwa_membership_status = models.CharField(max_length=20, choices=MEMBERSHIP_STATUS_CHOICES)
-    
+
     # Emergency Contact Details Data
     RELATIONSHIP_CHOICES = [
         ('Spouse', 'Spouse'),
