@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useLayoutEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -40,10 +40,7 @@ export function OWWAOfficerOrganization() {
 
   // Form state
   const [formData, setFormData] = useState({
-    lastName: "",
-    firstName: "",
-    middleName: "",
-    suffix: "",
+    fullName: "",
     email: "",
     officePhone: "",
     mobilePhone: "",
@@ -62,7 +59,49 @@ export function OWWAOfficerOrganization() {
 
   const stats: any[] = [];
 
-  const officers: OWWAOfficer[] = [];
+  // ── Scroll-lock refs: stabilise the background page's scroll position
+  //    across all modal open/close transitions so it never jumps to top.
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef(0);
+  const isModalOpenRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      if (!isModalOpenRef.current) {
+        savedScrollTopRef.current = container.scrollTop;
+      }
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const prevOpen = isModalOpenRef.current;
+    isModalOpenRef.current = showAddForm || showProfileDetails;
+
+    if (isModalOpenRef.current && !prevOpen) {
+      savedScrollTopRef.current = container.scrollTop;
+    } else if (!isModalOpenRef.current && prevOpen) {
+      requestAnimationFrame(() => { container.scrollTop = savedScrollTopRef.current; });
+    }
+    if (!prevOpen) savedScrollTopRef.current = container.scrollTop;
+  }, [showAddForm, showProfileDetails]);
+
+  // Pause body scroll while any modal is open so the background can't drift.
+  useLayoutEffect(() => {
+    const open = showAddForm || showProfileDetails;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = open ? "hidden" : "";
+    return () => { document.body.style.overflow = prev; };
+  }, [showAddForm, showProfileDetails]);
+
+  // Officers state – persists added officers in-session (no backend connected)
+  const [officers, setOfficers] = useState<OWWAOfficer[]>([]);
   const filteredOfficers = officers.filter(officer => {
     const matchesSearch = 
       officer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -80,16 +119,27 @@ export function OWWAOfficerOrganization() {
 
   const handleEditOfficer = (officer: OWWAOfficer) => {
     setSelectedOfficer(officer);
-    // Populate form with officer data
+
+    // Reverse-lookup: human-readable area → region key
+    const getRegionFromArea = (area: string): string => {
+      const first = area.split(",")[0].toLowerCase().trim();
+      for (const [key, label] of Object.entries(regionLabel)) {
+        if (first === label.toLowerCase()) return key;
+      }
+      return "";
+    };
+
+    const areaParts = officer.assignedArea.split(",").map(p => p.trim());
     setFormData({
       ...formData,
-      firstName: officer.name.split(' ')[0] || '',
-      lastName: officer.name.split(' ').slice(1).join(' ') || '',
+      fullName: officer.name,
       email: officer.email,
       mobilePhone: officer.phone,
       role: officer.role.toLowerCase().replace(' ', '-'),
       specialty: officer.specialty?.toLowerCase() || '',
-      assignedRegion: officer.assignedArea,
+      assignedRegion: getRegionFromArea(officer.assignedArea),
+      assignedProvince: areaParts[1] || "",
+      assignedCity: areaParts[2] || "",
     });
     setShowAddForm(true);
     toast.info(`Editing ${officer.name}`);
@@ -100,11 +150,122 @@ export function OWWAOfficerOrganization() {
     toast.success("Draft saved successfully!");
   };
 
+  // ── Label conversion helpers ────────────────────────────────────────────
+  // Converts stored kebab-case/dropdown values into human-readable labels.
+  const toLabel = (s: string) =>
+    s
+      .split("-")
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+
+  const contactLabel: Record<string, string> = {
+    "regional-director": "Regional Director",
+    "welfare-officer": "Welfare Officer",
+    "case-officer": "Case Officer",
+    "admin-staff": "Admin Staff",
+    "legal-officer": "Legal Officer",
+  };
+
+  const specialtyLabel: Record<string, string> = {
+    repatriation: "Repatriation Services",
+    legal: "Legal Assistance",
+    crisis: "Crisis Response",
+    medical: "Medical Assistance",
+    admin: "Administration",
+    documentation: "Documentation",
+  };
+
+  const regionLabel: Record<string, string> = {
+    ncr: "NCR (Metro Manila)",
+    "ncr-metro-manila": "NCR (Metro Manila)",
+    "region-1": "Region I (Ilocos)",
+    "region-3": "Region III (Central Luzon)",
+    "region-4a": "Region IV-A (CALABARZON)",
+    "region-7": "Region VII (Central Visayas)",
+    "region-11": "Region XI (Davao)",
+  };
+
+  const statusLabel: Record<string, string> = {
+    permanent: "Permanent",
+    contractual: "Contractual",
+    probationary: "Probationary",
+  };
+
+  // Fallback: toLabel converts arbitrary keys to Title Case as a safety net
+  const fallbackLabel = (s: string): string => toLabel(s.replace(/[-_]/g, " "));
+
+  /** Build a display string for the "Assigned Area" column. */
+  const buildAssignedArea = (region: string, province: string, city: string): string => {
+    const regionText = regionLabel[region] || fallbackLabel(region);
+    const parts = [regionText, province, city].filter(Boolean);
+    return parts.join(", ") || "—";
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    console.log("Submitting officer...", formData);
+
+    // ── Required-field validation ──────────────────────────────────────────
+    if (!formData.fullName.trim()) {
+      toast.error("Full Name is required.");
+      return;
+    }
+    if (!formData.email.trim()) {
+      toast.error("Email address is required.");
+      return;
+    }
+    if (!formData.role) {
+      toast.error("Role/Position is required.");
+      return;
+    }
+    if (!formData.assignedRegion) {
+      toast.error("Assigned Region is required.");
+      return;
+    }
+    if (!formData.startDate) {
+      toast.error("Start Date is required.");
+      return;
+    }
+    if (!formData.employmentStatus) {
+      toast.error("Employment Status is required.");
+      return;
+    }
+    if (!formData.officeAddress.trim()) {
+      toast.error("Office Address is required.");
+      return;
+    }
+
+    const fullName = formData.fullName.trim();
+    const nameParts = fullName.split(/\s+/);
+    const initials = `${(nameParts.at(-1) || "O")[0]}${(nameParts[0] || "O")[0]}`.toUpperCase();
+
+    const officer: OWWAOfficer = {
+      id: `EMP-${Date.now()}`,
+      name: fullName,
+      role: contactLabel[formData.role] || toLabel(formData.role),
+      assignedArea: buildAssignedArea(formData.assignedRegion, formData.assignedProvince, formData.assignedCity),
+      email: formData.email.trim(),
+      phone: formData.mobilePhone || formData.officePhone || "—",
+      avatar: initials,
+      status: statusLabel[formData.employmentStatus] || formData.employmentStatus,
+      statusColor: formData.employmentStatus === "permanent"
+        ? "bg-green-100 text-green-700"
+        : formData.employmentStatus === "contractual"
+          ? "bg-blue-100 text-blue-700"
+          : "bg-amber-100 text-amber-700",
+      specialty: specialtyLabel[formData.specialty] || (formData.specialty ? toLabel(formData.specialty) : undefined),
+      startDate: formData.startDate || undefined,
+    };
+
+    setOfficers(prev => [...prev, officer]);
     toast.success("OWWA officer added successfully!");
     setShowAddForm(false);
+    // Reset form fields on close so modal re-opens cleanly
+    setFormData({
+      fullName: "", email: "", officePhone: "", mobilePhone: "",
+      role: "", specialty: "", assignedRegion: "", assignedProvince: "",
+      assignedCity: "", officeAddress: "", employeeId: "", startDate: "",
+      employmentStatus: "", responsibilities: [], notes: "",
+    });
   };
 
   // Profile Details View - Modal Design
@@ -289,11 +450,47 @@ export function OWWAOfficerOrganization() {
           </div>
 
           {/* Form Content */}
-          <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)]">
+          <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor">
             <form onSubmit={handleSubmit} className="space-y-6">
               {/* Client Profiling Search */}
               <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
                 <ClientSearchWidget />
+              </div>
+
+              {/* Personal Information */}
+              <div className="bg-purple-50 p-6 rounded-lg border-l-4 border-l-purple-500">
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="size-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                    <User className="size-5 text-purple-600" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                    <p className="text-sm text-gray-600">Officer contact details</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <FormField label="Full Name *" required helperText="Enter full name as shown on official documents">
+                    <TextInput
+                      placeholder="e.g., Juan Dela Cruz Santos"
+                      value={formData.fullName}
+                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      required
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                    />
+                  </FormField>
+
+                  <FormField label="Email Address" required>
+                    <TextInput
+                      type="email"
+                      placeholder="officer@owwa.gov.ph"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      required
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                    />
+                  </FormField>
+                </div>
               </div>
 
               {/* Position Details */}
@@ -489,7 +686,7 @@ export function OWWAOfficerOrganization() {
 
   // Main List View
   return (
-    <div className="h-full bg-gray-50 overflow-y-auto">
+    <div className="h-full bg-gray-50 overflow-y-auto" ref={scrollContainerRef}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 space-y-4">
         {/* Search and Filters */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">

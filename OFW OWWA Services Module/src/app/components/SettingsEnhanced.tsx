@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { 
+import { useState, useEffect, useCallback } from "react";
+import {
   User, Lock, Bell, Globe, Shield, Database, Moon, Sun, Monitor,
   Camera, Mail, Phone, Briefcase, MapPin, Key, AlertTriangle,
   CheckCircle2, Download, FileText, Trash2, Eye, EyeOff
@@ -8,6 +8,22 @@ import { Button } from "./ui/button";
 import { Card, CardContent } from "./ui/card";
 import { Badge } from "./ui/badge";
 import { toast } from "sonner";
+import {
+  getSettings,
+  upsertSettings,
+  updateSettingsProfile,
+  updateSettingsSecurity,
+  changeSettingsPassword,
+  updateSettingsNotifications,
+  updateSettingsPreferences,
+  updateSettingsPrivacy,
+  type SettingsProfileData,
+  type SettingsSecurityData,
+  type SettingsPasswordData,
+  type SettingsNotificationsData,
+  type SettingsPreferencesData,
+  type SettingsPrivacyData,
+} from "../../api/clientApi";
 
 interface ProfileData {
   fullName: string;
@@ -116,6 +132,79 @@ export function SettingsEnhanced() {
     showActivityStatus: true
   });
 
+  // ─── Loading / error ────────────────────────────────────────────────────
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  // ─── Fetch settings from backend on mount ────────────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data } = await getSettings();
+        const b = data;
+
+        setProfileData({
+          fullName:  b.full_name       ?? "Administrator",
+          email:     b.email             || "admin@mswd.gov.ph",
+          phone:     b.phone             || "+63 912 345 6789",
+          department:b.department        || "Municipal Social Welfare and Development",
+          position:  b.position          || "System Administrator",
+          address:   b.address           || "MSWD Office, Municipal Hall, Main Street",
+          bio:       b.bio               || "",
+        });
+
+        setSecurityData({
+          currentPassword: "",
+          newPassword:     "",
+          confirmPassword: "",
+          twoFactorEnabled:b.two_factor_enabled  || false,
+          sessionTimeout:  b.session_timeout     || "30",
+        });
+
+        setNotifications({
+          email:             b.email_notifications   ?? true,
+          push:              b.push_notifications    ?? true,
+          sms:               b.sms_notifications     ?? false,
+          newClients:        b.new_clients           ?? true,
+          programUpdates:    b.program_updates       ?? true,
+          systemMaintenance: b.system_maintenance    ?? false,
+          emergencyRequests: b.emergency_requests    ?? true,
+          weeklyReports:     b.weekly_reports        ?? true,
+          monthlyReports:    b.monthly_reports       ?? false,
+        });
+
+        setPreferences({
+          theme:         (b.theme             as PreferencesData["theme"]) || "light",
+          language:      b.language           || "en",
+          timezone:      b.timezone           || "Asia/Manila",
+          dateFormat:    b.date_format        || "MM/DD/YYYY",
+          itemsPerPage:  b.items_per_page     ?? 25,
+          defaultDashboard: b.default_dashboard || "overview",
+        });
+
+        setPrivacy({
+          allowAnalytics:        b.allow_analytics        ?? true,
+          shareForResearch:      b.share_for_research     ?? false,
+          enableSessionLogging:  b.enable_session_logging  ?? true,
+          dataRetention:         b.data_retention         || "2-years",
+          showActivityStatus:    b.show_activity_status   ?? true,
+        });
+
+        setLoadError(null);
+      } catch (err: any) {
+        console.error("Failed to load settings:", err);
+        // Non-fatal – show defaults but surface a toast
+        toast.info("Settings loaded from defaults", {
+          description: err?.response?.data?.detail || "Backend unavailable; using local defaults.",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    load();
+  }, []);
+
   const tabs = [
     { id: "profile", label: "Profile Settings", icon: User },
     { id: "security", label: "Security", icon: Lock },
@@ -124,69 +213,160 @@ export function SettingsEnhanced() {
     { id: "privacy", label: "Privacy & Data", icon: Shield },
   ];
 
-  const handleProfileSave = () => {
-    // Validation
-    if (!profileData.fullName || !profileData.email) {
+  const handleProfileSave = async () => {
+    if (!profileData.fullName.trim() || !profileData.email.trim()) {
       toast.error("Please fill in all required fields");
       return;
     }
-
-    // Simulate API call
-    setTimeout(() => {
+    setIsSaving(true);
+    try {
+      await updateSettingsProfile({
+        full_name:  profileData.fullName,
+        email:      profileData.email,
+        phone:      profileData.phone,
+        department: profileData.department,
+        position:   profileData.position,
+        address:    profileData.address,
+        bio:        profileData.bio,
+      });
       toast.success("Profile updated successfully!");
-    }, 500);
+    } catch (err: any) {
+      toast.error("Failed to save profile", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleSecuritySave = () => {
-    // Password validation
+  const handleSecuritySave = async () => {
     if (securityData.newPassword && securityData.newPassword !== securityData.confirmPassword) {
       toast.error("Passwords do not match");
       return;
     }
-
     if (securityData.newPassword && securityData.newPassword.length < 8) {
       toast.error("Password must be at least 8 characters long");
       return;
     }
 
-    setTimeout(() => {
-      toast.success("Security settings updated successfully!");
-      setSecurityData({
-        ...securityData,
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: ""
+    setIsSaving(true);
+    try {
+      if (securityData.newPassword) {
+        await changeSettingsPassword({
+          current_password: securityData.currentPassword,
+          new_password:     securityData.newPassword,
+        });
+        toast.success("Password changed successfully!");
+        setSecurityData(s => ({ ...s, currentPassword: "", newPassword: "", confirmPassword: "" }));
+      } else {
+        await updateSettingsSecurity({
+          two_factor_enabled: securityData.twoFactorEnabled,
+          session_timeout:    securityData.sessionTimeout,
+        });
+        toast.success("Security settings updated successfully!");
+      }
+    } catch (err: any) {
+      toast.error("Failed to save security settings", {
+        description: err?.response?.data?.detail || err.message,
       });
-    }, 500);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleNotificationsSave = () => {
-    setTimeout(() => {
+  const handleNotificationsSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateSettingsNotifications({
+        email_notifications:   notifications.email,
+        push_notifications:    notifications.push,
+        sms_notifications:     notifications.sms,
+        new_clients:           notifications.newClients,
+        program_updates:       notifications.programUpdates,
+        system_maintenance:    notifications.systemMaintenance,
+        emergency_requests:    notifications.emergencyRequests,
+        weekly_reports:        notifications.weeklyReports,
+        monthly_reports:       notifications.monthlyReports,
+      });
       toast.success("Notification preferences saved!");
-    }, 500);
+    } catch (err: any) {
+      toast.error("Failed to save notification preferences", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePreferencesSave = () => {
-    setTimeout(() => {
+  const handlePreferencesSave = async () => {
+    setIsSaving(true);
+    try {
+      await updateSettingsPreferences({
+        theme:          preferences.theme,
+        language:       preferences.language,
+        timezone:       preferences.timezone,
+        date_format:    preferences.dateFormat,
+        items_per_page: preferences.itemsPerPage,
+        default_dashboard: preferences.defaultDashboard,
+      });
       toast.success("Preferences updated successfully!");
-    }, 500);
+    } catch (err: any) {
+      toast.error("Failed to save preferences", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handlePrivacySave = () => {
-    setTimeout(() => {
+  const handlePrivacySave = async () => {
+    setIsSaving(true);
+    try {
+      await updateSettingsPrivacy({
+        allow_analytics:        privacy.allowAnalytics,
+        share_for_research:     privacy.shareForResearch,
+        enable_session_logging: privacy.enableSessionLogging,
+        data_retention:         privacy.dataRetention,
+        show_activity_status:   privacy.showActivityStatus,
+      });
       toast.success("Privacy settings saved!");
-    }, 500);
+    } catch (err: any) {
+      toast.error("Failed to save privacy settings", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const handleDownloadData = () => {
-    toast.info("Preparing your data for download...");
-    setTimeout(() => {
-      toast.success("Download started! Check your downloads folder.");
-    }, 2000);
+  const handleDownloadData = async () => {
+    toast.info("Preparing your data for download…");
+    try {
+      const { data } = await getSettings();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `mswd-settings-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Download started!");
+    } catch (err: any) {
+      toast.error("Failed to export data", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    }
   };
 
-  const handleViewActivityLog = () => {
-    toast.info("Opening activity log...");
+  const handleViewActivityLog = async () => {
+    try {
+      await getSettingsPasswordHistory();
+      toast.info("Your settings are being saved to your profile (password history logged on the server).");
+    } catch (err: any) {
+      toast.error("Could not load activity log", {
+        description: err?.response?.data?.detail || err.message,
+      });
+    }
   };
 
   const handleDeleteAccount = () => {
@@ -195,9 +375,22 @@ export function SettingsEnhanced() {
     }
   };
 
-  return (
-    <div className="h-full overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
-      <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
+   return (
+     <>
+       {isLoading && (
+         <div className="flex items-center justify-center h-[calc(100vh-60px)]">
+           <div className="space-y-3 text-center">
+             <svg className="animate-spin mx-auto size-8 text-blue-600" fill="none" viewBox="0 0 24 24">
+               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+             </svg>
+             <p className="text-sm text-gray-600">Loading settings…</p>
+           </div>
+         </div>
+       )}
+       {!isLoading && (
+         <div className="h-full overflow-y-auto bg-gradient-to-br from-gray-50 to-gray-100">
+           <div className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8">
         {/* Settings Content */}
         <div className="space-y-6">
           {/* Horizontal Tabs Navigation */}
@@ -363,14 +556,23 @@ export function SettingsEnhanced() {
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
-                      <Button variant="outline">
-                        Cancel
-                      </Button>
-                      <Button 
+                      <Button variant="outline">Cancel</Button>
+                      <Button
                         onClick={handleProfileSave}
+                        disabled={isSaving}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                       >
-                        Save Changes
+                        {isSaving ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving…
+                          </span>
+                        ) : (
+                          "Save Changes"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -515,11 +717,22 @@ export function SettingsEnhanced() {
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <Button variant="outline">Cancel</Button>
-                      <Button 
+                      <Button
                         onClick={handleSecuritySave}
+                        disabled={isSaving}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                       >
-                        Update Security Settings
+                        {isSaving ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving…
+                          </span>
+                        ) : (
+                          "Update Security Settings"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -630,11 +843,22 @@ export function SettingsEnhanced() {
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <Button variant="outline">Cancel</Button>
-                      <Button 
+                      <Button
                         onClick={handleNotificationsSave}
+                        disabled={isSaving}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                       >
-                        Save Preferences
+                        {isSaving ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving…
+                          </span>
+                        ) : (
+                          "Save Preferences"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -765,11 +989,22 @@ export function SettingsEnhanced() {
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <Button variant="outline">Cancel</Button>
-                      <Button 
+                      <Button
                         onClick={handlePreferencesSave}
+                        disabled={isSaving}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                       >
-                        Save Preferences
+                        {isSaving ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving…
+                          </span>
+                        ) : (
+                          "Save Preferences"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -928,20 +1163,33 @@ export function SettingsEnhanced() {
 
                     <div className="flex justify-end gap-3 pt-4 border-t">
                       <Button variant="outline">Cancel</Button>
-                      <Button 
+                      <Button
                         onClick={handlePrivacySave}
+                        disabled={isSaving}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
                       >
-                        Save Settings
+                        {isSaving ? (
+                          <span className="flex items-center gap-2">
+                            <svg className="animate-spin size-4" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                            </svg>
+                            Saving…
+                          </span>
+                        ) : (
+                          "Save Settings"
+                        )}
                       </Button>
                     </div>
                   </div>
                 )}
-              </CardContent>
+               </CardContent>
             </Card>
           </div>
+         </div>
         </div>
-      </div>
-    </div>
-  );
-}
+       </div>
+      )}
+     </>
+   );
+ }

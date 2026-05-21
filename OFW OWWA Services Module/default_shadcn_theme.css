@@ -118,3 +118,11 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 }
+
+/* ── Scroll-jump guard ─────────────────────────────────────────────────── */
+/* Prevents the browser's overflow-anchor mechanism from scrolling the      */
+/* whole modal body upward whenever a child reflows on keystroke.           */
+.no-overflow-anchor {
+  overflow-anchor: none;
+  scroll-behavior: auto !important;
+}

@@ -1,12 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet
+from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet, UserSettingsViewSet
 
 # Automatically generate API endpoints
 router = DefaultRouter()
 router.register(r'ofw-registrations', OFWRegistrationViewSet)
 router.register(r'officer-profiles', OWWAOfficerProfileViewSet)
+router.register(r'user-settings', UserSettingsViewSet)
 
 urlpatterns = [
     path('admin/', admin.site.urls),
