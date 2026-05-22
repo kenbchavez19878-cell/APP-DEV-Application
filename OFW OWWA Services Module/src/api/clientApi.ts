@@ -1,5 +1,29 @@
 import axios from "axios";
 
+// Type for officer records returned by /api/officer-profiles/
+export interface OWWAOfficerApiRecord {
+  id: string;
+  client_id: string;
+  name: string;
+  role: string;
+  specialty?: string;
+  assigned_region: string;
+  assigned_province: string;
+  assigned_city: string;
+  assignedArea: string;
+  employment_status: string;
+  status: string;
+  statusColor: string;
+  startDate?: string;
+  email: string;
+  office_phone: string;
+  mobile_phone: string;
+  office_address: string;
+  additional_information: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
 const API = axios.create({
   baseURL: "http://localhost:8000/api/", // Points to your Django backend
   headers: {
@@ -43,6 +67,127 @@ export const uploadFiles = async (formData: FormData) => {
     headers: { "Content-Type": "multipart/form-data" },
   });
 };
+
+// ─── OWWA Officer Profiles ─────────────────────────────────────────────────────
+
+function roleLabelFromApi(r: string): string {
+  return roleLabelMap[r] || r;
+}
+function specialtyLabelFromApi(s: string): string {
+  return specialtyLabelMap[s] || s;
+}
+function regionLabelFromApi(reg: string): string {
+  return regionLabelMap[reg] || reg;
+}
+
+const roleLabelMap: Record<string, string> = {
+  "Regional Director": "Regional Director",
+  "Welfare Officer":    "Welfare Officer",
+  "Case Officer":       "Case Officer",
+  "Admin Staff":        "Admin Staff",
+  "Legal Officer":      "Legal Officer",
+};
+const specialtyLabelMap: Record<string, string> = {
+  "Repatriation Services":  "Repatriation Services",
+  "Legal Assistance":       "Legal Assistance",
+  "Crisis Response":        "Crisis Response",
+  "Medical Assistance":     "Medical Assistance",
+  "Administration":         "Administration",
+  "Documentation":          "Documentation",
+};
+const regionLabelMap: Record<string, string> = {
+  "region-1":  "Region I (Ilocos Region)",
+  "region-2":  "Region II (Cagayan Valley)",
+  "region-3":  "Region III (Central Luzon)",
+  "region-4a": "Region IV-A (CALABARZON)",
+  "region-4b": "Region IV-B (MIMAROPA)",
+  "region-5":  "Region V (Bicol Region)",
+  "region-6":  "Region VI (Western Visayas)",
+  "region-7":  "Region VII (Central Visayas)",
+  "region-8":  "Region VIII (Eastern Visayas)",
+  "region-9":  "Region IX (Zamboanga Peninsula)",
+  "region-10": "Region X (Northern Mindanao)",
+  "region-11": "Region XI (Davao Region)",
+  "region-12": "Region XII (SOCCSKSARGEN)",
+  "region-13": "Region XIII (Caraga)",
+  "car":       "Cordillera Administrative Region (CAR)",
+  "ncr":       "National Capital Region (NCR)",
+  "barmm":     "Bangsamoro Autonomous Region in Muslim Mindanao (BARMM)",
+};
+
+/** GET /api/officer-profiles/ – list all officer records */
+export const getOfficerProfiles = async (): Promise<OWWAOfficerApiRecord[]> => {
+  const { data } = await API.get("officer-profiles/");
+  return Array.isArray(data) ? data.map(mapOfficerFromApi) : [];
+};
+
+/** POST /api/officer-profiles/ – create a new officer */
+export const addOfficerProfile = async (payload: Record<string, any>): Promise<OWWAOfficerApiRecord> => {
+  const { data } = await API.post("officer-profiles/", payload);
+  return mapOfficerFromApi(data);
+};
+
+/** PUT /api/officer-profiles/{id}/ – full update of an existing officer */
+export const updateOfficerProfile = async (id: string, payload: Record<string, any>): Promise<OWWAOfficerApiRecord> => {
+  const { data } = await API.put(`officer-profiles/${id}/`, payload);
+  return mapOfficerFromApi(data);
+};
+
+/** DELETE /api/officer-profiles/{id}/ – remove an officer record */
+export const deleteOfficerProfile = async (id: string): Promise<void> => {
+  await API.delete(`officer-profiles/${id}/`);
+};
+
+/** Convert a hyphen/underscore/slug string to readable Title Case. */
+function toTitleCase(s: string): string {
+  return s
+    .replace(/[-_]+/g, " ")
+    .split(" ")
+    .filter(Boolean)
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(" ");
+}
+
+/** Internal: convert a raw DRF response record into the typed display shape. */
+function mapOfficerFromApi(r: any): OWWAOfficerApiRecord {
+  const id = r.client_id || "";
+  const displayName = r.full_name?.trim() || id;
+  const startDate = r.start_date
+    ? new Date(r.start_date).toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric" })
+    : undefined;
+  const rawRegion = r.assigned_region || "";
+  const assignedRegion = regionLabelMap[rawRegion] || rawRegion;
+  const provinceDisplay = toTitleCase(r.assigned_province || "");
+  const cityDisplay     = toTitleCase(r.assigned_city     || "");
+  const assignedArea = [assignedRegion, provinceDisplay, cityDisplay].filter(Boolean).join(", ");
+  return {
+    id,
+    client_id: id,
+    name: displayName,
+    role: roleLabelMap[r.role_position] || r.role_position || "",
+    specialty: specialtyLabelMap[r.specialty_focus_area] || r.specialty_focus_area || "",
+    assigned_region: rawRegion,
+    assigned_province: r.assigned_province || "",
+    assigned_city: r.assigned_city || "",
+    assignedArea,
+    employment_status: r.employment_status || "",
+    status: r.employment_status || "",
+    statusColor:
+      r.employment_status === "Permanent"
+        ? "bg-green-100 text-green-700"
+        : r.employment_status === "Contractual"
+          ? "bg-blue-100 text-blue-700"
+          : "bg-amber-100 text-amber-700",
+    startDate,
+    email: r.email || "",
+    office_phone: r.office_phone || "",
+    mobile_phone: r.mobile_phone || "",
+    office_address: r.office_address || "",
+    additional_information: r.additional_information || "",
+    created_at: r.created_at,
+    updated_at: r.updated_at,
+  };
+}
 
 // ─── Settings ───────────────────────────────────────────────────────────────
 

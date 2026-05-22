@@ -3,6 +3,12 @@ from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet, UserSettingsViewSet
 
+
+def home_redirect(request):
+    """Redirect the site root to the Django admin dashboard."""
+    from django.shortcuts import redirect
+    return redirect('/admin/')
+
 # Automatically generate API endpoints
 router = DefaultRouter()
 router.register(r'ofw-registrations', OFWRegistrationViewSet)
@@ -14,4 +20,5 @@ urlpatterns = [
     path('api/', include(router.urls)),  # Mounts your API links under http://127.0.0.1:8000/api/
     path('api/auth/', include('dj_rest_auth.urls')),  # Authentication endpoints
     path('api/auth/registration/', include('dj_rest_auth.registration.urls')),  # Registration endpoints
+    path('', home_redirect, name='home'),  # Redirect root to admin
 ]

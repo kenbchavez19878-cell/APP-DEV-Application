@@ -134,6 +134,7 @@ export function SelectInput({
   placeholder = "Select an option",
   required,
   disabled,
+  className,
 }: {
   options: { value: string; label: string }[];
   value?: string;
@@ -141,6 +142,7 @@ export function SelectInput({
   placeholder?: string;
   required?: boolean;
   disabled?: boolean;
+  className?: string;
 }) {
   return (
     <RadixSelect
@@ -158,7 +160,8 @@ export function SelectInput({
           focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200
           transition-all h-auto
           ${disabled ? "bg-gray-50 text-gray-500 cursor-not-allowed" : ""}
-          ${required ? "border-l-4 border-l-blue-500" : ""}`}
+          ${required ? "border-l-4 border-l-blue-500" : ""}
+          ${className ?? ""}`}
       >
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
@@ -363,6 +366,7 @@ export function DateInput({
   disabled,
   min,
   max,
+  className,
 }: {
   value?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -370,6 +374,7 @@ export function DateInput({
   disabled?: boolean;
   min?: string;
   max?: string;
+  className?: string;
 }) {
   const [open, setOpen] = useState(false);
   const selected = parseDateStr(value || "");
@@ -426,7 +431,8 @@ export function DateInput({
             focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all
             ${disabled ? "bg-gray-50 text-gray-500 cursor-not-allowed" : "cursor-pointer hover:border-blue-400"}
             ${required ? "border-l-4 border-l-blue-500" : ""}
-            ${!displayValue ? "text-gray-400" : "text-gray-900"}`}
+            ${!displayValue ? "text-gray-400" : "text-gray-900"}
+            ${className ?? ""}`}
         >
           <span>{displayValue || "Select date"}</span>
           <CalendarDays className="size-4 text-gray-400 flex-shrink-0" />
@@ -539,13 +545,11 @@ export function DateInput({
 
 // File Upload
 export function FileUpload({
-  label,
   accept,
   required,
   helperText,
   multiple,
 }: {
-  label?: string;
   accept?: string;
   required?: boolean;
   helperText?: string;

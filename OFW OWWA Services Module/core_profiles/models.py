@@ -43,6 +43,15 @@ class OFWRegistration(models.Model):
     WORKER_TYPE_CHOICES = [
         ('Land-based', 'Land-based OFW'),
         ('Sea-based', 'Sea-based OFW (Seafarer)'),
+        ('Government-OFW', 'Government Employed OFW'),
+        ('Business-OFW', 'Business / Entrepreneur OFW'),
+        ('Student-OFW', 'Student / Scholar OFW'),
+        ('Athlete-OFW', 'Athlete / Coach OFW'),
+        ('Artist-OFW', 'Artist / Entertainer OFW'),
+        ('Missionary-OFW', 'Missionary / Volunteer OFW'),
+        ('Media-OFW', 'Media / Journalist OFW'),
+        ('Dependent-OFW', 'Dependent Family Member'),
+        ('Retiree-OFW', 'Retired OFW'),
     ]
     COUNTRY_CHOICES = [
         ('Saudi Arabia', 'Saudi Arabia'),
@@ -90,7 +99,13 @@ class OFWRegistration(models.Model):
 class OWWAOfficerProfile(models.Model):
     # Core Identification
     client_id = models.CharField(max_length=50, unique=True, primary_key=True)
-    
+
+    # Personal Information
+    full_name      = models.CharField(max_length=200, default="")
+    email          = models.EmailField(blank=True, default="")
+    office_phone   = models.CharField(max_length=20, blank=True, default="")
+    mobile_phone   = models.CharField(max_length=20, blank=True, default="")
+
     # Position Details Data
     ROLE_CHOICES = [
         ('Regional Director', 'Regional Director'),

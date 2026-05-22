@@ -1,19 +1,22 @@
-import { useState, useRef, useLayoutEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
 import { Card, CardContent } from "./ui/card";
 import {
-  Search, ChevronDown, Edit, Plus, X, Save, FileText, Eye,
-  Download, Shield, MapPin, Phone, Mail, User, Users,
-  ArrowLeft, Check, AlertCircle, Building2, Briefcase
+  Search, Edit, Plus, X, Save, FileText, Eye,
+  Shield, MapPin, Phone, Mail, User,
+  Check, AlertCircle, Briefcase
 } from "lucide-react";
 import {
-  FormSection, FormField, TextInput, SelectInput, TextArea,
-  DateInput, InfoAlert, CheckboxField
+  FormField, TextInput, SelectInput, TextArea,
+  DateInput
 } from "./AssistanceFormComponents";
 import { toast } from "sonner";
 import { ClientSearchWidget } from "./ClientSearchWidget";
+import {
+  getOfficerProfiles, addOfficerProfile,
+} from "../../api/clientApi";
 
 interface OWWAOfficer {
   id: string;
@@ -34,9 +37,8 @@ export function OWWAOfficerOrganization() {
   const [showProfileDetails, setShowProfileDetails] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
-  const [areaFilter, setAreaFilter] = useState("all");
+  const [areaFilter] = useState("all");
   const [selectedOfficer, setSelectedOfficer] = useState<OWWAOfficer | null>(null);
-  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -57,7 +59,46 @@ export function OWWAOfficerOrganization() {
     notes: ""
   });
 
-  const stats: any[] = [];
+  // Officers – loaded from backend on mount, updated via API calls
+  const [officers, setOfficers] = useState<OWWAOfficer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [loadError, setLoadError] = useState<string>("");
+
+  // Load all officers from the Django backend on every mount/resume
+  useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setLoadError("");
+    getOfficerProfiles()
+      .then((apiRecords) => {
+        if (cancelled) return;
+        const mapped = apiRecords.map((r) => ({
+          id:             r.id,
+          name:           r.name,
+          role:           r.role,
+          assignedArea:   r.assignedArea,
+          email:          r.email,
+          phone:          r.mobile_phone || r.office_phone || "—",
+          avatar:         "",          // no avatar field in backend – UI falls back to initials
+          status:         r.status,
+          statusColor:    r.statusColor,
+          specialty:      r.specialty || undefined,
+          startDate:      r.startDate || undefined,
+        }));
+        setOfficers(mapped);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("Failed to fetch officer profiles:", err);
+        setLoadError("Unable to load officer profiles. Retrying…");
+        // keep officers as [] – "No officers found" will be shown
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   // ── Scroll-lock refs: stabilise the background page's scroll position
   //    across all modal open/close transitions so it never jumps to top.
@@ -100,15 +141,18 @@ export function OWWAOfficerOrganization() {
     return () => { document.body.style.overflow = prev; };
   }, [showAddForm, showProfileDetails]);
 
-  // Officers state – persists added officers in-session (no backend connected)
-  const [officers, setOfficers] = useState<OWWAOfficer[]>([]);
+  // ── Loading state banners ──────────────────────────────────────────────────
+  // filteredOfficers is derived from the officers state (populated by API on mount)
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // Officers state – loaded from backend on mount, updated via API calls
   const filteredOfficers = officers.filter(officer => {
     const matchesSearch = 
-      officer.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      officer.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      officer.email.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesRole = roleFilter === "all" || officer.role.toLowerCase().includes(roleFilter.toLowerCase());
-    const matchesArea = areaFilter === "all" || officer.assignedArea.includes(areaFilter);
+      (officer.name || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (officer.id || "").toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (officer.email || "").toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesRole = roleFilter === "all" || (officer.role || "").toLowerCase().includes(roleFilter.toLowerCase());
+    const matchesArea = areaFilter === "all" || (officer.assignedArea || "").includes(areaFilter);
     return matchesSearch && matchesRole && matchesArea;
   });
 
@@ -191,17 +235,7 @@ export function OWWAOfficerOrganization() {
     probationary: "Probationary",
   };
 
-  // Fallback: toLabel converts arbitrary keys to Title Case as a safety net
-  const fallbackLabel = (s: string): string => toLabel(s.replace(/[-_]/g, " "));
-
-  /** Build a display string for the "Assigned Area" column. */
-  const buildAssignedArea = (region: string, province: string, city: string): string => {
-    const regionText = regionLabel[region] || fallbackLabel(region);
-    const parts = [regionText, province, city].filter(Boolean);
-    return parts.join(", ") || "—";
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // ── Required-field validation ──────────────────────────────────────────
@@ -235,30 +269,67 @@ export function OWWAOfficerOrganization() {
     }
 
     const fullName = formData.fullName.trim();
-    const nameParts = fullName.split(/\s+/);
-    const initials = `${(nameParts.at(-1) || "O")[0]}${(nameParts[0] || "O")[0]}`.toUpperCase();
 
-    const officer: OWWAOfficer = {
-      id: `EMP-${Date.now()}`,
-      name: fullName,
-      role: contactLabel[formData.role] || toLabel(formData.role),
-      assignedArea: buildAssignedArea(formData.assignedRegion, formData.assignedProvince, formData.assignedCity),
-      email: formData.email.trim(),
-      phone: formData.mobilePhone || formData.officePhone || "—",
-      avatar: initials,
-      status: statusLabel[formData.employmentStatus] || formData.employmentStatus,
-      statusColor: formData.employmentStatus === "permanent"
-        ? "bg-green-100 text-green-700"
-        : formData.employmentStatus === "contractual"
-          ? "bg-blue-100 text-blue-700"
-          : "bg-amber-100 text-amber-700",
-      specialty: specialtyLabel[formData.specialty] || (formData.specialty ? toLabel(formData.specialty) : undefined),
-      startDate: formData.startDate || undefined,
+    // Build a unique client_id from email prefix + short timestamp
+    const emailParts = formData.email.trim().split("@");
+    const emailPrefix = (emailParts[0] || "officer").replace(/[^a-zA-Z0-9]/g, "").slice(0, 12);
+    const newClientId = `${emailPrefix}-${Date.now().toString(36)}`;
+
+    // Map kebab-case form values → human-readable labels for display
+    const roleDisplay    = contactLabel[formData.role]    || toLabel(formData.role);
+    const specialtyStr   = formData.specialty
+      ? (specialtyLabel[formData.specialty] || toLabel(formData.specialty))
+      : "";
+    // Payload sent to the Django backend (uses label/display values per model choices)
+    const payload: Record<string, any> = {
+      client_id:              newClientId,
+      full_name:              fullName,
+      role_position:          roleDisplay,
+      specialty_focus_area:   specialtyStr,
+      assigned_region:        formData.assignedRegion,
+      assigned_province:      formData.assignedProvince || "",
+      assigned_city:          formData.assignedCity || "",
+      start_date:             formData.startDate,
+      employment_status:      statusLabel[formData.employmentStatus] || formData.employmentStatus,
+      office_address:         formData.officeAddress.trim(),
+      additional_information: formData.notes || "",
+      email:                  formData.email.trim(),
+      office_phone:           formData.officePhone || "",
+      mobile_phone:           formData.mobilePhone || "",
     };
 
-    setOfficers(prev => [...prev, officer]);
-    toast.success("OWWA officer added successfully!");
-    setShowAddForm(false);
+    setIsSaving(true);
+    try {
+      await addOfficerProfile(payload);
+
+      // Refresh the list from the backend so all in-flight mutations are reflected
+      const fresh = await getOfficerProfiles();
+      const mapped = fresh.map((r) => ({
+        id:           r.id,
+        name:         r.name,
+        role:         r.role,
+        assignedArea: r.assignedArea,
+        email:        r.email,
+        phone:        r.mobile_phone || r.office_phone || "—",
+        avatar:       "",
+        status:       r.status,
+        statusColor:  r.statusColor,
+        specialty:    r.specialty || undefined,
+        startDate:    r.startDate || undefined,
+      }));
+      setOfficers(mapped);
+      toast.success("OWWA officer added successfully!");
+      setShowAddForm(false);
+    } catch (err: any) {
+      console.error("Failed to create officer profile:", err);
+      const msg = err?.response?.data
+        ? JSON.stringify(err.response.data)
+        : "Failed to create officer profile. Please try again.";
+      toast.error(msg);
+    } finally {
+      setIsSaving(false);
+    }
+
     // Reset form fields on close so modal re-opens cleanly
     setFormData({
       fullName: "", email: "", officePhone: "", mobilePhone: "",
@@ -335,7 +406,7 @@ export function OWWAOfficerOrganization() {
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Employee ID:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>EMP-2024-{selectedOfficer.id.split('-')[2]}</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOfficer.id}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Email:</span>
@@ -384,7 +455,7 @@ export function OWWAOfficerOrganization() {
                   </div>
                   <div className="text-sm flex justify-between">
                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Employment Type:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Permanent</span>
+                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOfficer.status}</span>
                   </div>
                 </div>
               </div>
@@ -470,13 +541,13 @@ export function OWWAOfficerOrganization() {
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <FormField label="Full Name *" required helperText="Enter full name as shown on official documents">
+<FormField label="Full Name *" required helperText="Enter full name as shown on official documents">
                     <TextInput
-                      placeholder="e.g., Juan Dela Cruz Santos"
-                      value={formData.fullName}
-                      onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                      placeholder="officer@owwa.gov.ph"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -487,7 +558,7 @@ export function OWWAOfficerOrganization() {
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
                 </div>
@@ -518,7 +589,7 @@ export function OWWAOfficerOrganization() {
                       value={formData.role}
                       onChange={(e) => setFormData({...formData, role: e.target.value})}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -534,7 +605,7 @@ export function OWWAOfficerOrganization() {
                       ]}
                       value={formData.specialty}
                       onChange={(e) => setFormData({...formData, specialty: e.target.value})}
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -551,7 +622,7 @@ export function OWWAOfficerOrganization() {
                       value={formData.assignedRegion}
                       onChange={(e) => setFormData({...formData, assignedRegion: e.target.value})}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -560,7 +631,7 @@ export function OWWAOfficerOrganization() {
                       placeholder="Province"
                       value={formData.assignedProvince}
                       onChange={(e) => setFormData({...formData, assignedProvince: e.target.value})}
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -569,7 +640,7 @@ export function OWWAOfficerOrganization() {
                       placeholder="City/Municipality"
                       value={formData.assignedCity}
                       onChange={(e) => setFormData({...formData, assignedCity: e.target.value})}
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -579,7 +650,7 @@ export function OWWAOfficerOrganization() {
                       onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                       max={new Date().toISOString().split('T')[0]}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
 
@@ -593,7 +664,7 @@ export function OWWAOfficerOrganization() {
                       value={formData.employmentStatus}
                       onChange={(e) => setFormData({...formData, employmentStatus: e.target.value})}
                       required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100 h-11"
+                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
                     />
                   </FormField>
                 </div>
@@ -617,7 +688,7 @@ export function OWWAOfficerOrganization() {
                     value={formData.officeAddress}
                     onChange={(e) => setFormData({...formData, officeAddress: e.target.value})}
                     required
-                    className="bg-white border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                    className="bg-white border-orange-200 focus:border-orange-500 focus:ring-2 focus:ring-orange-100/30"
                   />
                 </FormField>
               </div>
@@ -639,7 +710,7 @@ export function OWWAOfficerOrganization() {
                     placeholder="Any additional information..."
                     value={formData.notes}
                     onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="bg-white border-gray-300 focus:border-gray-500 focus:ring-2 focus:ring-gray-100"
+                    className="bg-white border-gray-300 focus:border-gray-500 focus:ring-2 focus:ring-gray-100/30"
                   />
                 </FormField>
               </div>
@@ -661,6 +732,7 @@ export function OWWAOfficerOrganization() {
                 type="button"
                 variant="outline"
                 onClick={handleSaveDraft}
+                disabled={isSaving}
                 className="gap-2 hover:bg-gray-50 transition-colors"
               >
                 <Save className="size-4" />
@@ -668,10 +740,15 @@ export function OWWAOfficerOrganization() {
               </Button>
               <Button
                 onClick={handleSubmit}
-                className="gap-2 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white transition-colors"
+                disabled={isSaving}
+                className={`gap-2 transition-colors ${
+                  isSaving
+                    ? 'bg-blue-400 cursor-not-allowed opacity-70'
+                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white'
+                }`}
               >
                 <Check className="size-4" />
-                Add Officer
+                {isSaving ? 'Saving…' : 'Add Officer'}
               </Button>
             </div>
           </div>
@@ -750,7 +827,33 @@ export function OWWAOfficerOrganization() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredOfficers.length === 0 ? (
+                {isLoading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <div className="flex flex-col items-center gap-3">
+                        <Search className="size-8 text-gray-400 animate-spin" />
+                        <p className="text-sm text-gray-500">Loading officer profiles…</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : loadError ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-12 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <AlertCircle className="size-12 text-amber-500" />
+                        <p className="text-amber-600" style={{ fontWeight: 500 }}>{loadError}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => window.location.reload()}
+                          className="mt-1"
+                        >
+                          Retry
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredOfficers.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">

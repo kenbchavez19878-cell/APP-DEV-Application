@@ -9,9 +9,28 @@ class OFWRegistrationAdmin(admin.ModelAdmin):
 
 @admin.register(OWWAOfficerProfile)
 class OWWAOfficerProfileAdmin(admin.ModelAdmin):
-    list_display = ('client_id', 'role_position', 'specialty_focus_area', 'assigned_region', 'assigned_province', 'assigned_city', 'employment_status', 'start_date')
-    search_fields = ('client_id', 'assigned_city', 'assigned_province', 'assigned_region')
+    list_display = ('client_id', 'full_name', 'role_position', 'specialty_focus_area', 'assigned_region', 'assigned_province', 'assigned_city', 'employment_status', 'start_date')
+    search_fields = ('client_id', 'full_name', 'email', 'assigned_city', 'assigned_province', 'assigned_region')
     list_filter = ('role_position', 'specialty_focus_area', 'employment_status', 'assigned_region')
+    fieldsets = (
+        ('Identification', {
+            'fields': ('client_id', 'full_name'),
+            'description': 'Client ID is the unique identifier. Full Name is shown in the officer table and profile view.',
+        }),
+        ('Personal Information', {
+            'fields': ('email', 'office_phone', 'mobile_phone'),
+            'description': 'Contact details of the officer.',
+        }),
+        ('Position Details', {
+            'fields': ('role_position', 'specialty_focus_area', 'employment_status', 'start_date'),
+        }),
+        ('Assignment Details', {
+            'fields': ('assigned_region', 'assigned_province', 'assigned_city'),
+        }),
+        ('Office & Notes', {
+            'fields': ('office_address', 'additional_information'),
+        }),
+    )
 
 @admin.register(UserSettings)
 class UserSettingsAdmin(admin.ModelAdmin):
