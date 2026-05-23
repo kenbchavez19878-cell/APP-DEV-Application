@@ -65,7 +65,7 @@ export function MainDashboard() {
             Dashboard
           </h1>
           <p className="text-[15px] text-[#6b7280]">
-            Welcome back, let's manage your jurisdiction • {new Date().toLocaleDateString()}
+            Welcome back, let's manage your jurisdiction - {new Date().toLocaleDateString()}
           </p>
         </div>
 
@@ -99,40 +99,43 @@ export function MainDashboard() {
           })}
         </div>
 
-        {/* CHARTS (NO DATA KEPT) */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* CHARTS (hidden until real data exists) */}
+        {monthlyData.length > 0 || programData.length > 0 ? (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
 
-          <div className="lg:col-span-2">
-            <Card className="relative">
-              <CardContent className="p-6 h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={monthlyData}>
-                    <CartesianGrid />
-                    <XAxis dataKey="month" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="cases" fill="#3b82f6" />
-                  </BarChart>
-                </ResponsiveContainer>
-                <NoData />
-              </CardContent>
-            </Card>
+
+            <div className="lg:col-span-2">
+              <Card className="relative">
+                <CardContent className="p-6 h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={monthlyData}>
+                      <CartesianGrid />
+                      <XAxis dataKey="month" />
+                      <YAxis />
+                      <Tooltip />
+                      <Bar dataKey="cases" fill="#3b82f6" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <NoData />
+                </CardContent>
+              </Card>
+            </div>
+
+            <div>
+              <Card className="relative">
+                <CardContent className="p-6 h-[260px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={programData} dataKey="value" />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <NoData />
+                </CardContent>
+              </Card>
+            </div>
+
           </div>
-
-          <div>
-            <Card className="relative">
-              <CardContent className="p-6 h-[260px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={programData} dataKey="value" />
-                  </PieChart>
-                </ResponsiveContainer>
-                <NoData />
-              </CardContent>
-            </Card>
-          </div>
-
-        </div>
+        ) : null}
 
       </div>
     </div>

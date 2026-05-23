@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useLayoutEffect } from "react";
 import {
   Search, X, CheckCircle, UserX, ChevronRight, ChevronDown,
   User, Phone, MapPin, Calendar, Users
@@ -39,6 +39,34 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   const [expandedFamilyIds, setExpandedFamilyIds] = useState<Set<string>>(new Set());
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const scrollAnchorRef = useRef(0);
+  const restorePendingRef = useRef(false);
+
+   // ── Scroll-jump guard ────────────────────────────────────────────────
+  // Runs only when the dropdown's actual content or visibility changes,
+  // NOT on every keystroke.  If an ancestor's scrollTop drifted by more
+  // than 1 px (e.g. browser's overflow-anchor fired) it is snapped back.
+  useLayoutEffect(() => {
+    const c = containerRef.current;
+    if (!c) return;
+    let el: HTMLElement | null = c;
+    const anchor = scrollAnchorRef.current;
+    while (el && el !== document.body && (!(el.scrollHeight > el.clientHeight) || !(el.className.includes("overflow-y") || el.style.overflowY === "auto" || el.style.overflowY === "scroll")))
+      el = el.parentElement;
+    const scroller = el || c;
+    if (Math.abs(scroller.scrollTop - anchor) > 1)
+      scroller.scrollTop = anchor;
+    // ^^ gate: only write when off by >1 px — no-op when typing normally
+  }, [results, isOpen, expandedFamilyIds, selected]);
+
+  const savedScrollTop = () => {
+    if (!containerRef.current) return;
+    let el: HTMLElement | null = containerRef.current;
+    while (el && el !== document.body && (!(el.scrollHeight > el.clientHeight) || !(el.className.includes("overflow-y") || el.style.overflowY === "auto" || el.style.overflowY === "scroll")))
+      el = el.parentElement;
+    const scroller = el || containerRef.current;
+    scrollAnchorRef.current = scroller.scrollTop;
+  };
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -51,6 +79,7 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   }, []);
 
   const handleSearch = (value: string) => {
+    savedScrollTop();                    // ← capture scrollTop before any state update
     setQuery(value);
     setExpandedFamilyIds(new Set());
     if (value.trim().length < 2) {
@@ -89,6 +118,7 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   };
 
   const toggleFamily = (clientId: string) => {
+    savedScrollTop();
     setExpandedFamilyIds((prev) => {
       const next = new Set(prev);
       if (next.has(clientId)) next.delete(clientId);
@@ -98,6 +128,7 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   };
 
   const selectFamilyHead = (client: ClientProfile) => {
+    savedScrollTop();
     setSelected({ client });
     setQuery("");
     setIsOpen(false);
@@ -107,6 +138,7 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   };
 
   const selectMember = (client: ClientProfile, member: FamilyMember) => {
+    savedScrollTop();
     setSelected({ client, member });
     setQuery("");
     setIsOpen(false);
@@ -116,13 +148,13 @@ export function ClientSearchWidget({ onClientSelect, className = "" }: ClientSea
   };
 
   const handleClear = () => {
+    savedScrollTop();
     setSelected(null);
     setQuery("");
     setResults([]);
     setIsOpen(false);
     setHasSearched(false);
     onClientSelect?.(null, null);
-    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const initials = (name: string) =>

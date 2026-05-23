@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Card, CardContent } from "./ui/card";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
@@ -10,10 +10,12 @@ import {
   HandHeart,
   Download,
   ChevronDown,
+  RefreshCw,
 } from "lucide-react";
 import { toast } from "sonner";
+import { getProfilingData } from "../../api/clientApi";
 
-interface OFWRecord {
+interface DashboardRow {
   id: string;
   name: string;
   country: string;
@@ -22,15 +24,89 @@ interface OFWRecord {
   registrationDate: string;
 }
 
-export function OFWServicesDashboard({ data = [] }: { data?: OFWRecord[] }) {
+interface OFWServicesDashboardProps {
+  records?: any[];
+  loading?: boolean;
+  onRefresh?: () => void;
+}
+
+export function OFWServicesDashboard({ records: externalRecords, loading: externalLoading, onRefresh }: OFWServicesDashboardProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCountry, setSelectedCountry] = useState("all");
   const [selectedOwwaStatus, setSelectedOwwaStatus] = useState("all");
   const [selectedAssistanceStatus, setSelectedAssistanceStatus] =
     useState("all");
+  const [data, setData] = useState<DashboardRow[]>([]);
+  const [dataLoading, setDataLoading] = useState(true);
+
+  const effectiveLoading = externalLoading ?? dataLoading;
+  const effectiveRecords = externalRecords ?? [];
+
+  // Build dashboard rows from either external records or self-fetched raw rows
+  const rowsFromRecords = useMemo(
+    () =>
+      (effectiveRecords.length > 0 ? effectiveRecords : []).map((r: any) => ({
+        id: String(r.client_id || r.id),
+        name: `${r.last_name || ""}, ${r.first_name || ""}`.trim() || "—",
+        country: r.country_of_deployment || r.country || "Not Set",
+        owwaStatus:
+          r.owwa_membership_status === "Active"
+            ? "Active"
+            : r.owwa_membership_status === "Expired"
+            ? "Expired"
+            : "N/A",
+        assistanceStatus: "None" as const,
+        registrationDate: r.created_at
+          ? new Date(r.created_at).toLocaleDateString()
+          : "—",
+      })),
+    [effectiveRecords]
+  );
+
+  // Fallback: self-fetch when no external records passed
+  const rowsFromFetch = useMemo(() => (data.length > 0 ? data : []), [data]);
+
+  const tableData = effectiveRecords.length > 0 ? rowsFromRecords : rowsFromFetch;
+
+  // Shared mapper so both self-fetch and external-record paths produce identical rows
+  const mapRow = (r: any): DashboardRow => ({
+    id: String(r.client_id || r.id),
+    name: `${r.last_name || ""}, ${r.first_name || ""}`.trim() || "—",
+    country: r.country_of_deployment || r.country || "Not Set",
+    owwaStatus:
+      r.owwa_membership_status === "Active"
+        ? "Active"
+        : r.owwa_membership_status === "Expired"
+        ? "Expired"
+        : "N/A",
+    assistanceStatus: "None" as const,
+    registrationDate: r.created_at
+      ? new Date(r.created_at).toLocaleDateString()
+      : "—",
+  });
+
+  useEffect(() => {
+    if (effectiveRecords.length > 0) return;
+    const load = async () => {
+      setDataLoading(true);
+      try {
+        const res: any = await getProfilingData();
+        // Support both raw array response and DRF paginated {results: [...]}
+        const raw = (res as any)?.data ?? ((res as any)?.results ?? []);
+        const list = Array.isArray(raw) ? raw : [];
+        setData(list.map(mapRow));
+      } catch (e) {
+        console.error("Dashboard load error:", e);
+        setData([]);
+      } finally {
+        setDataLoading(false);
+      }
+    };
+    load();
+  }, [effectiveRecords]);
 
   const filtered = useMemo(() => {
-    return (data || []).filter((r) => {
+    return (tableData || []).filter((r) => {
       const matchSearch =
         r.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         r.id.toLowerCase().includes(searchQuery.toLowerCase());
@@ -47,11 +123,11 @@ export function OFWServicesDashboard({ data = [] }: { data?: OFWRecord[] }) {
 
       return matchSearch && matchCountry && matchOwwa && matchAssist;
     });
-  }, [data, searchQuery, selectedCountry, selectedOwwaStatus, selectedAssistanceStatus]);
+  }, [tableData, searchQuery, selectedCountry, selectedOwwaStatus, selectedAssistanceStatus]);
 
-  const total = data.length;
-  const active = data.filter((r) => r.owwaStatus === "Active").length;
-  const assisted = data.filter((r) => r.assistanceStatus === "Assisted").length;
+  const total = tableData.length;
+  const active = tableData.filter((r) => r.owwaStatus === "Active").length;
+  const assisted = tableData.filter((r) => r.assistanceStatus === "Assisted").length;
 
   const handleExport = () => {
     toast.success(`Exporting ${filtered.length} records...`);
@@ -198,7 +274,13 @@ export function OFWServicesDashboard({ data = [] }: { data?: OFWRecord[] }) {
               </thead>
 
               <tbody>
-                {filtered.length === 0 ? (
+                {effectiveLoading ? (
+                  <tr>
+                    <td className="p-12 text-center text-gray-400" colSpan={6}>
+                      <RefreshCw className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td className="p-6 text-center text-gray-500" colSpan={6}>
                       No records found
