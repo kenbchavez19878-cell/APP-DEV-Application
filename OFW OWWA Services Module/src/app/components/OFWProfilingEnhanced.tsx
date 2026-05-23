@@ -207,7 +207,7 @@ export default function OFWProfiling() {
       country: ofw.country,
       occupation: ofw.occupation || '',
       agency: ofw.agency || '',
-      workerType: ofw.workerType.toLowerCase().replace('-', '') as "landbased" | "seabased" | "",
+      workerType: ofw.workerType.toLowerCase() as "land-based" | "sea-based" | "",
     });
     setShowAddForm(true);
     toast.info(`Editing ${ofw.name}`);
