@@ -40,14 +40,12 @@ API.interceptors.request.use((config) => {
   return config;
 });
 
-<<<<<<< HEAD
 // Authenticates against Django's User model and returns JWT tokens
 export const login = async (payload: { username: string; password: string }) => {
   return API.post("login/", payload);
 };
-=======
+
 // ─── OFW Registration ───────────────────────────────────────────────────────
->>>>>>> bb931591fb0c47657ad21439eea743bcc663a869
 
 // Fetches data for the dashboard stats
 export const getDashboardData = async () => {

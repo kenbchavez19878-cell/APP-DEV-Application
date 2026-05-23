@@ -35,7 +35,7 @@ class OFWRegistration(models.Model):
     nationality = models.CharField(max_length=20, choices=NATIONALITY_CHOICES, default="Filipino")
 
     # Contact Information
-    phone_number = models.CharField(max_length=20, blank=True)
+    phone_number = models.CharField(max_length=15, blank=True, null=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
 
@@ -291,16 +291,3 @@ class UserSettings(models.Model):
         return f"Settings – {self.user.get_username()}"
 
 
-class PasswordChangeHistory(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="password_history")
-    changed_at  = models.DateTimeField(auto_now_add=True)
-    ip_address  = models.GenericIPAddressField(blank=True, null=True)
-    user_agent  = models.CharField(max_length=255, blank=True, default="")
-
-    class Meta:
-        ordering = ["-changed_at"]
-        verbose_name = "Password Change History"
-        verbose_name_plural = "Password Change History"
-
-    def __str__(self):
-        return f"Password changed – {self.user.get_username()} @ {self.changed_at}"

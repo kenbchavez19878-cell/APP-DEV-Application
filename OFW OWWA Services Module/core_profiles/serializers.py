@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import OFWRegistration, OWWAOfficerProfile
+from .models import OFWRegistration, OWWAOfficerProfile, UserSettings
 
 User = get_user_model()
 
@@ -21,4 +21,9 @@ class OFWRegistrationSerializer(serializers.ModelSerializer):
 class OWWAOfficerProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = OWWAOfficerProfile
+        fields = '__all__'
+
+class UserSettingsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserSettings
         fields = '__all__'

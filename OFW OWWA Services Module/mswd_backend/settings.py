@@ -42,11 +42,6 @@ INSTALLED_APPS = [
     'rest_framework',
     'rest_framework.authtoken',  # Required for dj-rest-auth
     'corsheaders',
-<<<<<<< HEAD
-    'rest_framework_simplejwt',
-    'rest_framework_simplejwt.token_blacklist',
-
-=======
     
     # Authentication (allauth & dj-rest-auth)
     'dj_rest_auth',
@@ -55,7 +50,6 @@ INSTALLED_APPS = [
     'allauth.account',
     'allauth.socialaccount',
     
->>>>>>> bb931591fb0c47657ad21439eea743bcc663a869
     # Your custom profile application
     'core_profiles',
 ]

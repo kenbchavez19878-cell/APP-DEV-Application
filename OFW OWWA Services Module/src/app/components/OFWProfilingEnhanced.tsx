@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -18,16 +18,35 @@ import { ClientSearchWidget } from "./ClientSearchWidget";
 interface OFWRecord {
   id: string;
   name: string;
+  firstName: string;
+  lastName: string;
   profileType: string;
   country: string;
   workerType: "Land-based" | "Sea-based";
-  owwaStatus: "Active" | "Expired" | "N/A";
+  owwaStatus: "Active" | "Expired" | "Not a Member";
   status: string;
   statusColor: string;
   avatar: string;
   agency?: string;
   occupation?: string;
+  contractStart?: string;
   contractExpiry?: string;
+  birthDate?: string;
+  formattedBirthDate?: string;
+  gender?: string;
+  civilStatus?: string;
+  nationality?: string;
+  phoneNumber?: string;
+  email?: string;
+  address?: string;
+  membershipNumber?: string;
+  issueDate?: string;
+  formattedIssueDate?: string;
+  validityDate?: string;
+  formattedValidityDate?: string;
+  emergencyContactName?: string;
+  relationship?: string;
+  emergencyContactNumber?: string;
 }
 
 export default function OFWProfiling() {
@@ -38,6 +57,134 @@ export default function OFWProfiling() {
   const [workerTypeFilter, setWorkerTypeFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [selectedOFW, setSelectedOFW] = useState<OFWRecord | null>(null);
+  const [ofws, setOfws] = useState<OFWRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Fetch OFW registrations from Django API on mount
+  useEffect(() => {
+    let cancelled = false;
+
+    async function fetchOFWs() {
+      try {
+        setLoading(true);
+        setError(null);
+        const res = await fetch("/api/ofw-registrations/");
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const raw: unknown = await res.json();
+
+        if (!Array.isArray(raw)) return;
+
+        const transformed: OFWRecord[] = raw.map((item: Record<string, unknown>) => {
+          const first = (item.first_name as string) || "";
+          const last = (item.last_name as string) || "";
+          const owwaStatus = item.owwa_membership_status as string;
+          const country = item.country_of_deployment as string;
+          const workerType = item.worker_type as string;
+          const id = (item.client_id as string) || "";
+
+          return {
+            id,
+            firstName: first,
+            lastName: last,
+            name: `${last}, ${first}`.trim(),
+            profileType: "Individual Profile",
+            country: workerType === "Sea-based" && !country ? "International Waters" : country,
+            workerType: workerType === "Sea-based" || workerType === "Sea-based OFW (Seafarer)"
+              ? "Sea-based"
+              : "Land-based",
+            owwaStatus: owwaStatus as OFWRecord["owwaStatus"],
+            status: owwaStatus === "Active" || owwaStatus === "Expired"
+              ? owwaStatus === "Active"
+                ? "Active"
+                : "Pending"
+              : owwaStatus === "Not a Member"
+              ? "Pending"
+              : "Active",
+            statusColor:
+              owwaStatus === "Active"
+                ? "bg-green-100 text-green-700"
+                : owwaStatus === "Expired"
+                ? "bg-orange-100 text-orange-700"
+                : "bg-gray-100 text-gray-700",
+            avatar:
+              first && last
+                ? `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
+                : id.length >= 2
+                ? id.slice(0, 2).toUpperCase()
+                : "OF",
+            agency: item.recruitment_agency as string | undefined,
+            occupation: item.occupation_position as string | undefined,
+            contractStart: item.contract_start
+              ? new Date(item.contract_start as string).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : undefined,
+            contractExpiry: item.contract_end
+              ? new Date(item.contract_end as string).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : undefined,
+            birthDate: item.birth_date
+              ? new Date(item.birth_date as string).toISOString().split("T")[0]
+              : undefined,
+            formattedBirthDate: item.birth_date
+              ? new Date(item.birth_date as string).toLocaleDateString("en-US", {
+                  month: "long",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : undefined,
+            gender: item.gender as string | undefined,
+            civilStatus: item.civil_status as string | undefined,
+            nationality: item.nationality as string | undefined,
+            phoneNumber: item.phone_number as string | undefined,
+            email: item.email as string | undefined,
+            address: item.address as string | undefined,
+            membershipNumber: item.membership_number as string | undefined,
+            issueDate: item.issue_date
+              ? new Date(item.issue_date as string).toISOString().split("T")[0]
+              : undefined,
+            formattedIssueDate: item.issue_date
+              ? new Date(item.issue_date as string).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : undefined,
+            validityDate: item.validity_date
+              ? new Date(item.validity_date as string).toISOString().split("T")[0]
+              : undefined,
+            formattedValidityDate: item.validity_date
+              ? new Date(item.validity_date as string).toLocaleDateString("en-US", {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : undefined,
+            emergencyContactName: item.emergency_contact_name as string | undefined,
+            relationship: item.relationship as string | undefined,
+            emergencyContactNumber: item.emergency_contact_number as string | undefined,
+          };
+        });
+
+        if (!cancelled) setOfws(transformed);
+      } catch (err) {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load OFW records");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    fetchOFWs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -97,90 +244,6 @@ export default function OFWProfiling() {
     skillsQualifications: [] as string[],
     notes: ""
   });
-
-  const ofws: OFWRecord[] = [
-    {
-      id: "OFW-2024-001",
-      name: "Maria dela Cruz",
-      profileType: "Individual Profile",
-      country: "Saudi Arabia",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "MD",
-      agency: "ABC Recruitment Agency",
-      occupation: "Domestic Helper",
-      contractExpiry: "Dec 31, 2024"
-    },
-    {
-      id: "OFW-2024-002",
-      name: "Jose Rizal",
-      profileType: "Individual Profile",
-      country: "Singapore",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Repatriated",
-      statusColor: "bg-blue-100 text-blue-700",
-      avatar: "JR",
-      agency: "XYZ Agency",
-      occupation: "Construction Worker"
-    },
-    {
-      id: "OFW-2024-003",
-      name: "Gabriela Silang",
-      profileType: "Individual Profile",
-      country: "Hong Kong",
-      workerType: "Land-based",
-      owwaStatus: "Expired",
-      status: "Distressed",
-      statusColor: "bg-yellow-100 text-yellow-700",
-      avatar: "GS",
-      agency: "DEF Placement",
-      occupation: "Caregiver"
-    },
-    {
-      id: "OFW-2024-004",
-      name: "Andres Bonifacio",
-      profileType: "Individual Profile",
-      country: "International Waters",
-      workerType: "Sea-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "AB",
-      agency: "Maritime Services Corp",
-      occupation: "Seaman",
-      contractExpiry: "Jun 15, 2025"
-    },
-    {
-      id: "OFW-2024-005",
-      name: "Teresa Magbanua",
-      profileType: "Individual Profile",
-      country: "United Arab Emirates",
-      workerType: "Land-based",
-      owwaStatus: "Active",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "TM",
-      agency: "Gulf Careers Inc",
-      occupation: "Nurse",
-      contractExpiry: "Mar 20, 2025"
-    },
-    {
-      id: "OFW-2024-006",
-      name: "Melchora Aquino",
-      profileType: "Individual Profile",
-      country: "Qatar",
-      workerType: "Land-based",
-      owwaStatus: "Expired",
-      status: "Active",
-      statusColor: "bg-green-100 text-green-700",
-      avatar: "MA",
-      agency: "Middle East Staffing",
-      occupation: "Hotel Staff"
-    }
-  ];
 
   const filteredOFWs = ofws.filter(ofw => {
     const matchesSearch = 
@@ -296,19 +359,19 @@ export default function OFWProfiling() {
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Birth Date:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>June 15, 1985</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedBirthDate || "N/A"}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Gender:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>Female</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.gender || "N/A"}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Civil Status:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>Married</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.civilStatus || "N/A"}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Nationality:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>Filipino</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.nationality || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -319,15 +382,15 @@ export default function OFWProfiling() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 text-sm">
                       <User className="size-4 text-gray-400" />
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>+63 912 345 6789</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.phoneNumber || "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <MapPin className="size-4 text-gray-400" />
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>maria.delacruz@email.com</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.email || "N/A"}</span>
                     </div>
                     <div className="flex items-start gap-3 text-sm">
                       <MapPin className="size-4 text-gray-400 mt-0.5" />
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>123 Rizal Street, Brgy. San Jose<br />Quezon City, Metro Manila 1100</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.address || "N/A"}</span>
                     </div>
                   </div>
                 </div>
@@ -353,10 +416,10 @@ export default function OFWProfiling() {
                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Agency:</span>
                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.agency || "N/A"}</span>
                   </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract Start:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Jan 1, 2023</span>
-                  </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract Start:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.contractStart || "N/A"}</span>
+                    </div>
                   <div className="text-sm flex justify-between">
                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract End:</span>
                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.contractExpiry || "N/A"}</span>
@@ -374,18 +437,18 @@ export default function OFWProfiling() {
                       {selectedOFW.owwaStatus}
                     </Badge>
                   </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Membership No.:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>OWWA-2023-12345</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Issue Date:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Jan 1, 2023</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Validity Date:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Dec 31, 2025</span>
-                  </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Membership No.:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.membershipNumber || "N/A"}</span>
+                    </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Issue Date:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedIssueDate || "N/A"}</span>
+                    </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Validity Date:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedValidityDate || "N/A"}</span>
+                    </div>
                 </div>
               </div>
 
@@ -394,17 +457,17 @@ export default function OFWProfiling() {
                 <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>Emergency Contact</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Name:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Juan dela Cruz</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Relationship:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>Spouse</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Contact Number:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>+63 918 765 4321</span>
-                  </div>
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Name:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactName || "N/A"}</span>
+                    </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Relationship:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.relationship || "N/A"}</span>
+                    </div>
+                    <div className="text-sm flex justify-between">
+                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Contact Number:</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactNumber || "N/A"}</span>
+                    </div>
                 </div>
               </div>
 
@@ -792,7 +855,25 @@ export default function OFWProfiling() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {filteredOFWs.length === 0 ? (
+                {loading ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <Activity className="size-10 text-blue-500 mx-auto mb-3 animate-spin" />
+                      <p className="text-gray-500" style={{ fontWeight: 400 }}>Loading OFW records…</p>
+                    </td>
+                  </tr>
+                ) : error ? (
+                  <tr>
+                    <td colSpan={6} className="px-6 py-16 text-center">
+                      <AlertCircle className="size-10 text-red-500 mx-auto mb-3" />
+                      <p className="text-gray-700 mb-2" style={{ fontWeight: 500 }}>Failed to load OFW records</p>
+                      <p className="text-gray-500 text-sm mb-4" style={{ fontWeight: 400 }}>{error}</p>
+                      <Button variant="outline" onClick={() => window.location.reload()} className="gap-2">
+                        Retry
+                      </Button>
+                    </td>
+                  </tr>
+                ) : filteredOFWs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">

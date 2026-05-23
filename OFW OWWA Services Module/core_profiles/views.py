@@ -4,8 +4,8 @@ from rest_framework import status
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import authenticate
 from rest_framework import viewsets
-from .models import OFWRegistration, OWWAOfficerProfile
-from .serializers import OFWRegistrationSerializer, OWWAOfficerProfileSerializer, LoginSerializer, UserSerializer
+from .models import OFWRegistration, OWWAOfficerProfile, UserSettings
+from .serializers import OFWRegistrationSerializer, OWWAOfficerProfileSerializer, LoginSerializer, UserSerializer, UserSettingsSerializer
 
 
 class LoginView(APIView):
@@ -56,3 +56,8 @@ class OFWRegistrationViewSet(viewsets.ModelViewSet):
 class OWWAOfficerProfileViewSet(viewsets.ModelViewSet):
     queryset = OWWAOfficerProfile.objects.all()
     serializer_class = OWWAOfficerProfileSerializer
+
+
+class UserSettingsViewSet(viewsets.ModelViewSet):
+    queryset = UserSettings.objects.all()
+    serializer_class = UserSettingsSerializer

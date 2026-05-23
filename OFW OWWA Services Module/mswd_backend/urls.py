@@ -1,17 +1,13 @@
 from django.contrib import admin
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-<<<<<<< HEAD
-from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet, LoginView
-=======
-from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet, UserSettingsViewSet
+from core_profiles.views import OFWRegistrationViewSet, OWWAOfficerProfileViewSet, UserSettingsViewSet, LoginView
 
 
 def home_redirect(request):
     """Redirect the site root to the Django admin dashboard."""
     from django.shortcuts import redirect
     return redirect('/admin/')
->>>>>>> bb931591fb0c47657ad21439eea743bcc663a869
 
 # Automatically generate API endpoints
 router = DefaultRouter()

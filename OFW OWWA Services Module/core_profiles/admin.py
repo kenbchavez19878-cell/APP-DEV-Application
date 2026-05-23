@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import OFWRegistration, OWWAOfficerProfile, UserSettings, PasswordChangeHistory
+from .models import OFWRegistration, OWWAOfficerProfile, UserSettings
 
 @admin.register(OFWRegistration)
 class OFWRegistrationAdmin(admin.ModelAdmin):
@@ -39,9 +39,3 @@ class UserSettingsAdmin(admin.ModelAdmin):
     list_filter   = ('theme', 'language', 'two_factor_enabled', 'data_retention')
     readonly_fields = ('updated_at',)
 
-@admin.register(PasswordChangeHistory)
-class PasswordChangeHistoryAdmin(admin.ModelAdmin):
-    list_display  = ('user', 'changed_at', 'ip_address')
-    search_fields = ('user__username',)
-    list_filter   = ('changed_at',)
-    readonly_fields = ('user', 'changed_at', 'ip_address', 'user_agent')
