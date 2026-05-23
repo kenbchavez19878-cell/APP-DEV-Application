@@ -4,6 +4,7 @@ import { Eye, EyeOff, ChevronDown, X, Mail, Phone, MessageCircle } from "lucide-
 import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { login } from "../../api/clientApi";
 
 interface LoginFormProps {
   onLogin: (role: string) => void;
@@ -53,20 +54,25 @@ export function LoginForm({ onLogin }: LoginFormProps) {
 
     setIsLoading(true);
 
-    // Simulate API call
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      
+      const response = await login({ username, password });
+      const { access, refresh } = response.data;
+
+      // Persist tokens for subsequent authenticated requests
+      localStorage.setItem("access", access);
+      localStorage.setItem("refresh", refresh);
+
       toast.success("Login successful!", {
         description: `Welcome back! Logged in as ${role}`,
       });
-      
-      // Navigate to dashboard
+
       onLogin(role);
-    } catch (error) {
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail || "Please check your credentials and try again.";
       toast.error("Login failed", {
-        description: "Please check your credentials and try again.",
+        description: detail,
       });
+    } finally {
       setIsLoading(false);
     }
   };
