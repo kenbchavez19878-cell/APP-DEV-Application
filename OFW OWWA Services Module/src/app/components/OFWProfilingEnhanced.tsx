@@ -57,64 +57,58 @@ export default function OFWProfiling() {
   const [countryFilter, setCountryFilter] = useState("all");
   const [selectedOFW, setSelectedOFW] = useState<OFWRecord | null>(null);
 
-   // Form state
-  const [formData, setFormData] = useState({
-    // Personal Information
-    lastName: "",
-    firstName: "",
-    middleName: "",
-    suffix: "",
-    birthDate: "",
-    gender: "",
-    civilStatus: "",
-    nationality: "Filipino",
-    contactNumber: "",
-    email: "",
-    
-    // Address
-    street: "",
-    barangay: "",
-    city: "",
-    province: "",
-    zipCode: "",
-    
-// Employment Details
+// Form state
+   const [formData, setFormData] = useState({
+     // Personal Information
+     lastName: "",
+     firstName: "",
+     middleName: "",
+     suffix: "",
+     birthDate: "",
+     gender: "",
+     civilStatus: "",
+     nationality: "Filipino",
+     contactNumber: "",
+     email: "",
+     address: "",
+     
+     // Employment Details
      workerType: "land-based" as "land-based" | "sea-based" | "",
      country: "",
-    city_abroad: "",
-    occupation: "",
-    jobTitle: "",
-    agency: "",
-    agencyLicenseNo: "",
-    
-    // Contract Details
-    contractStartDate: "",
-    contractEndDate: "",
-    contractDuration: "",
-    monthlyIncome: 0,
-    currency: "USD",
-    
-// OWWA Membership
+     city_abroad: "",
+     occupation: "",
+     jobTitle: "",
+     agency: "",
+     agencyLicenseNo: "",
+     
+     // Contract Details
+     contractStartDate: "",
+     contractEndDate: "",
+     contractDuration: "",
+     monthlyIncome: 0,
+     currency: "USD",
+     
+     // OWWA Membership
      owwaMembershipStatus: "active",
      owwaMembershipNo: "",
-    owwaValidityDate: "",
-    
-    // Emergency Contact
-    emergencyContactName: "",
-    emergencyRelationship: "",
-    emergencyContactNumber: "",
-    emergencyAddress: "",
-    
-    // Sea-based Specific
-    vesselName: "",
-    vesselType: "",
-    rank: "",
-    seaServiceYears: 0,
-    
-    // Additional
-    skillsQualifications: [] as string[],
-    notes: ""
-  });
+     owwaValidityDate: "",
+     
+     // Emergency Contact
+     emergencyContactName: "",
+     emergencyRelationship: "",
+     emergencyContactNumber: "",
+     emergencyAddress: "",
+     
+     // Sea-based Specific
+     vesselName: "",
+     vesselType: "",
+     rank: "",
+     seaServiceYears: 0,
+     
+     // Additional
+     skillsQualifications: [] as string[],
+     notes: ""
+   });
 
   // Helper to format date from YYYY-MM-DD to readable format
   const formatDate = (dateStr?: string) => {
@@ -281,48 +275,44 @@ const handleEditOFW = (ofw: OFWRecord) => {
      const firstName = ofw.rawFirstName || "";
      const lastName = ofw.rawLastName || "";
 
-     setFormData({
-       firstName: firstName,
-       lastName: lastName,
-       middleName: "",
-       suffix: "",
-       birthDate: ofw.birthDate || "",
-       gender: ofw.gender || "",
-       civilStatus: ofw.civilStatus || "",
-       nationality: ofw.nationality || "Filipino",
-       contactNumber: ofw.phone || "",
-       email: ofw.email || "",
-       street: "",
-       barangay: "",
-       city: "",
-       province: "",
-       zipCode: "",
-       workerType: ofw.workerType.toLowerCase() as "land-based" | "sea-based" | "",
-       country: countryReverseMap[ofw.country] || ofw.country || "",
-       city_abroad: "",
-       occupation: ofw.occupation || "",
-       jobTitle: "",
-       agency: ofw.agency || "",
-       agencyLicenseNo: "",
-       contractStartDate: ofw.contractStart || "",
-       contractEndDate: ofw.contractEnd || "",
-       contractDuration: "",
-       monthlyIncome: 0,
-       currency: "USD",
-       owwaMembershipStatus: ofw.owwaStatus === "Active" ? "active" : ofw.owwaStatus === "Expired" ? "expired" : "not-member",
-       owwaMembershipNo: ofw.owwaMembershipNo || "",
-       owwaValidityDate: ofw.owwaValidityDate || "",
-       emergencyContactName: ofw.emergencyContactName || "",
-       emergencyRelationship: relationshipReverseMap[ofw.emergencyRelationship || ""] || ofw.emergencyRelationship || "",
-       emergencyContactNumber: ofw.emergencyContactNumber || "",
-       emergencyAddress: "",
-       vesselName: "",
-       vesselType: "",
-       rank: "",
-       seaServiceYears: 0,
-       skillsQualifications: [],
-       notes: "",
-     });
+setFormData({
+        firstName: firstName,
+        lastName: lastName,
+        middleName: "",
+        suffix: "",
+        birthDate: ofw.birthDate || "",
+        gender: ofw.gender || "",
+        civilStatus: ofw.civilStatus || "",
+        nationality: ofw.nationality || "Filipino",
+        contactNumber: ofw.phone || "",
+        email: ofw.email || "",
+        address: ofw.address || "",
+        workerType: ofw.workerType.toLowerCase() as "land-based" | "sea-based" | "",
+        country: countryReverseMap[ofw.country] || ofw.country || "",
+        city_abroad: "",
+        occupation: ofw.occupation || "",
+        jobTitle: "",
+        agency: ofw.agency || "",
+        agencyLicenseNo: "",
+        contractStartDate: ofw.contractStart || "",
+        contractEndDate: ofw.contractEnd || "",
+        contractDuration: "",
+        monthlyIncome: 0,
+        currency: "USD",
+        owwaMembershipStatus: ofw.owwaStatus === "Active" ? "active" : ofw.owwaStatus === "Expired" ? "expired" : "not-member",
+        owwaMembershipNo: ofw.owwaMembershipNo || "",
+        owwaValidityDate: ofw.owwaValidityDate || "",
+        emergencyContactName: ofw.emergencyContactName || "",
+        emergencyRelationship: relationshipReverseMap[ofw.emergencyRelationship || ""] || ofw.emergencyRelationship || "",
+        emergencyContactNumber: ofw.emergencyContactNumber || "",
+        emergencyAddress: "",
+        vesselName: "",
+        vesselType: "",
+        rank: "",
+        seaServiceYears: 0,
+        skillsQualifications: [],
+        notes: "",
+      });
      setShowAddForm(true);
      toast.info(`Editing ${ofw.name}`);
    };
@@ -391,15 +381,18 @@ const handleSubmit = async (e: React.FormEvent) => {
          relationship: relationshipValue,
          emergency_contact_number: formData.emergencyContactNumber?.trim() || selectedOFW?.emergencyContactNumber?.trim() || "",
        };
-       // Optional fields
-       if (formData.middleName?.trim()) basePayload.middle_name = formData.middleName.trim();
-       if (formData.birthDate?.trim()) basePayload.birth_date = formData.birthDate.trim();
-       if (formData.gender) basePayload.gender = formData.gender;
-       if (formData.civilStatus) basePayload.civil_status = formData.civilStatus;
-       if (formData.nationality) basePayload.nationality = formData.nationality;
-       if (formData.contactNumber?.trim()) basePayload.phone_number = formData.contactNumber.trim();
-       if (formData.email?.trim()) basePayload.email = formData.email.trim();
-       if (formData.agency?.trim()) basePayload.recruitment_agency = formData.agency.trim();
+// Optional fields
+        if (formData.middleName?.trim()) basePayload.middle_name = formData.middleName.trim();
+        if (formData.birthDate?.trim()) basePayload.birth_date = formData.birthDate.trim();
+        if (formData.gender) basePayload.gender = formData.gender;
+        if (formData.civilStatus) basePayload.civil_status = formData.civilStatus;
+        if (formData.nationality) basePayload.nationality = formData.nationality;
+        if (formData.contactNumber?.trim()) basePayload.phone_number = formData.contactNumber.trim();
+        if (formData.email?.trim()) basePayload.email = formData.email.trim();
+        if (formData.address?.trim()) basePayload.address = formData.address.trim();
+        if (formData.agency?.trim()) basePayload.recruitment_agency = formData.agency.trim();
+        if (formData.contractStartDate?.trim()) basePayload.contract_start = formData.contractStartDate.trim();
+        if (formData.contractEndDate?.trim()) basePayload.contract_end = formData.contractEndDate.trim();
 
 if (editingOFWId) {
           // UPDATE existing record - include client_id in payload (required by DRF serializer)
@@ -694,106 +687,121 @@ if (editingOFWId) {
 {/* Form Content */}
            <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor">
              <form onSubmit={handleSubmit} className="space-y-5">
-{/* Personal Information */}
-                <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-l-blue-500">
-                  <div className="flex items-center gap-3 mb-5">
-                    <div className="size-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <User className="size-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
-                      <p className="text-sm text-gray-600">Worker's basic details</p>
-                    </div>
-                  </div>
+               {/* Client Profiling Search */}
+               <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
+                 <ClientSearchWidget />
+               </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <FormField label="First Name" required>
-                    <TextInput
-                      placeholder="Given name"
-                      value={formData.firstName}
-                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-                      required
-                    />
-                  </FormField>
+               {/* Personal Information */}
+               <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-l-blue-500">
+                 <div className="flex items-center gap-3 mb-5">
+                   <div className="size-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                     <User className="size-5 text-blue-600" />
+                   </div>
+                   <div>
+                     <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                     <p className="text-sm text-gray-600">Worker's basic details</p>
+                   </div>
+                 </div>
 
-                  <FormField label="Last Name" required>
-                    <TextInput
-                      placeholder="Family surname"
-                      value={formData.lastName}
-                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-                      required
-                    />
-                  </FormField>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                 <FormField label="First Name" required>
+                   <TextInput
+                     placeholder="Given name"
+                     value={formData.firstName}
+                     onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                     required
+                   />
+                 </FormField>
 
-                  <FormField label="Birth Date">
-                    <DateInput
-                      value={formData.birthDate}
-                      onChange={(e) => setFormData({...formData, birthDate: e.target.value})}
-                    />
-                  </FormField>
+                 <FormField label="Last Name" required>
+                   <TextInput
+                     placeholder="Family surname"
+                     value={formData.lastName}
+                     onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                     required
+                   />
+                 </FormField>
 
-                  <FormField label="Gender">
-                    <SelectInput
-                      options={[
-                        { value: "Male", label: "Male" },
-                        { value: "Female", label: "Female" },
-                        { value: "Other", label: "Other" }
-                      ]}
-                      value={formData.gender}
-                      onChange={(e) => setFormData({...formData, gender: e.target.value})}
-                    />
-                  </FormField>
+                 <FormField label="Birth Date">
+                   <DateInput
+                     value={formData.birthDate}
+                     onChange={(e) => setFormData({...formData, birthDate: e.target.value})}
+                   />
+                 </FormField>
 
-                  <FormField label="Civil Status">
-                    <SelectInput
-                      options={[
-                        { value: "Single", label: "Single" },
-                        { value: "Married", label: "Married" },
-                        { value: "Divorced", label: "Divorced" },
-                        { value: "Widowed", label: "Widowed" },
-                        { value: "Separated", label: "Separated" }
-                      ]}
-                      value={formData.civilStatus}
-                      onChange={(e) => setFormData({...formData, civilStatus: e.target.value})}
-                    />
-                  </FormField>
+                 <FormField label="Gender">
+                   <SelectInput
+                     options={[
+                       { value: "Male", label: "Male" },
+                       { value: "Female", label: "Female" },
+                       { value: "Other", label: "Other" }
+                     ]}
+                     value={formData.gender}
+                     onChange={(e) => setFormData({...formData, gender: e.target.value})}
+                   />
+                 </FormField>
 
-                  <FormField label="Nationality">
-                    <SelectInput
-                      options={[
-                        { value: "Filipino", label: "Filipino" },
-                        { value: "American", label: "American" },
-                        { value: "Chinese", label: "Chinese" },
-                        { value: "Japanese", label: "Japanese" },
-                        { value: "Korean", label: "Korean" },
-                        { value: "Indian", label: "Indian" }
-                      ]}
-                      value={formData.nationality}
-                      onChange={(e) => setFormData({...formData, nationality: e.target.value})}
-                    />
-                  </FormField>
-                </div>
+                 <FormField label="Civil Status">
+                   <SelectInput
+                     options={[
+                       { value: "Single", label: "Single" },
+                       { value: "Married", label: "Married" },
+                       { value: "Divorced", label: "Divorced" },
+                       { value: "Widowed", label: "Widowed" },
+                       { value: "Separated", label: "Separated" }
+                     ]}
+                     value={formData.civilStatus}
+                     onChange={(e) => setFormData({...formData, civilStatus: e.target.value})}
+                   />
+                 </FormField>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
-                  <FormField label="Contact Number">
-                    <TextInput
-                      type="tel"
-                      placeholder="e.g., 09123456789"
-                      value={formData.contactNumber}
-                      onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
-                    />
-                  </FormField>
+                 <FormField label="Nationality">
+                   <SelectInput
+                     options={[
+                       { value: "Filipino", label: "Filipino" },
+                       { value: "American", label: "American" },
+                       { value: "Chinese", label: "Chinese" },
+                       { value: "Japanese", label: "Japanese" },
+                       { value: "Korean", label: "Korean" },
+                       { value: "Indian", label: "Indian" }
+                     ]}
+                     value={formData.nationality}
+                     onChange={(e) => setFormData({...formData, nationality: e.target.value})}
+                   />
+                 </FormField>
+               </div>
 
-                  <FormField label="Email">
-                    <TextInput
-                      type="email"
-                      placeholder="email@example.com"
-                      value={formData.email}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    />
-                  </FormField>
-                </div>
-                </div>
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                 <FormField label="Contact Number">
+                   <TextInput
+                     type="tel"
+                     placeholder="e.g., 09123456789"
+                     value={formData.contactNumber}
+                     onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
+                   />
+                 </FormField>
+
+                 <FormField label="Email">
+                   <TextInput
+                     type="email"
+                     placeholder="email@example.com"
+                     value={formData.email}
+                     onChange={(e) => setFormData({...formData, email: e.target.value})}
+                   />
+                 </FormField>
+               </div>
+
+               <div className="mt-5">
+                 <FormField label="Address">
+                   <TextArea
+                     placeholder="Full address"
+                     value={formData.address || ""}
+                     onChange={(e) => setFormData({...formData, address: e.target.value})}
+                   />
+                 </FormField>
+               </div>
+               </div>
 
                {/* Employment Details */}
                <div className="bg-purple-50 p-6 rounded-lg border-l-4 border-l-purple-500">
@@ -850,25 +858,41 @@ if (editingOFWId) {
                      />
                    </FormField>
 
-                   <FormField label="Occupation/Position" required>
-                     <TextInput
-                       placeholder="e.g., Domestic Helper, Nurse, Seaman"
-                       value={formData.occupation}
-                       onChange={(e) => setFormData({...formData, occupation: e.target.value})}
-                       required
-                     />
-                   </FormField>
+<FormField label="Occupational/Position" required>
+                      <TextInput
+                        placeholder="e.g., Domestic Helper, Nurse, Seaman"
+                        value={formData.occupation}
+                        onChange={(e) => setFormData({...formData, occupation: e.target.value})}
+                        required
+                      />
+                    </FormField>
 
-                   <FormField label="Recruitment Agency">
-                     <TextInput
-                       placeholder="POEA-licensed agency"
-                       value={formData.agency}
-                       onChange={(e) => setFormData({...formData, agency: e.target.value})}
-                     />
-                   </FormField>
-                 </div>
-               </div>
-             </div>
+                    <FormField label="Recruitment Agency">
+                      <TextInput
+                        placeholder="POEA-licensed agency"
+                        value={formData.agency}
+                        onChange={(e) => setFormData({...formData, agency: e.target.value})}
+                      />
+                    </FormField>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                    <FormField label="Contract Start Date">
+                      <DateInput
+                        value={formData.contractStartDate}
+                        onChange={(e) => setFormData({...formData, contractStartDate: e.target.value})}
+                      />
+                    </FormField>
+
+                    <FormField label="Contract End Date">
+                      <DateInput
+                        value={formData.contractEndDate}
+                        onChange={(e) => setFormData({...formData, contractEndDate: e.target.value})}
+                      />
+                    </FormField>
+                  </div>
+                </div>
+              </div>
 
               {/* OWWA Membership */}
               <div className="bg-orange-50 p-6 rounded-lg border-l-4 border-l-orange-500">
