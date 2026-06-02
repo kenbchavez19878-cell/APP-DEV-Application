@@ -67,6 +67,11 @@ export const saveClientProfile = async (payload: any) => {
   return API.post("ofw-registrations/", payload);
 };
 
+// Updates an existing registration entry
+export const updateClientProfile = async (id: string, payload: any) => {
+  return API.put(`ofw-registrations/${id}/`, payload);
+};
+
 export const uploadFiles = async (formData: FormData) => {
   return API.post("ofw-registrations/upload/", formData, {
     headers: { "Content-Type": "multipart/form-data" },

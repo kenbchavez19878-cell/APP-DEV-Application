@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Avatar, AvatarFallback } from "./ui/avatar";
@@ -14,40 +14,39 @@ import {
 } from "./AssistanceFormComponents";
 import { toast } from "sonner";
 import { ClientSearchWidget } from "./ClientSearchWidget";
+import { getProfilingData, saveClientProfile, updateClientProfile } from "../../api/clientApi";
 
 interface OFWRecord {
-  id: string;
-  name: string;
-  firstName: string;
-  lastName: string;
-  profileType: string;
-  country: string;
-  workerType: "Land-based" | "Sea-based";
-  owwaStatus: "Active" | "Expired" | "Not a Member";
-  status: string;
-  statusColor: string;
-  avatar: string;
-  agency?: string;
-  occupation?: string;
-  contractStart?: string;
-  contractExpiry?: string;
-  birthDate?: string;
-  formattedBirthDate?: string;
-  gender?: string;
-  civilStatus?: string;
-  nationality?: string;
-  phoneNumber?: string;
-  email?: string;
-  address?: string;
-  membershipNumber?: string;
-  issueDate?: string;
-  formattedIssueDate?: string;
-  validityDate?: string;
-  formattedValidityDate?: string;
-  emergencyContactName?: string;
-  relationship?: string;
-  emergencyContactNumber?: string;
-}
+   id: string;
+   dbId?: string;
+   rawFirstName?: string;
+   rawLastName?: string;
+   name: string;
+   profileType: string;
+   country: string;
+   workerType: "Land-based" | "Sea-based";
+   owwaStatus: "Active" | "Expired" | "N/A";
+   status: string;
+   statusColor: string;
+   avatar: string;
+   agency?: string;
+   occupation?: string;
+   contractExpiry?: string;
+   birthDate?: string;
+   gender?: string;
+   civilStatus?: string;
+   nationality?: string;
+   phone?: string;
+   email?: string;
+   address?: string;
+   contractStart?: string;
+   contractEnd?: string;
+   owwaMembershipNo?: string;
+   owwaValidityDate?: string;
+   emergencyContactName?: string;
+   emergencyRelationship?: string;
+   emergencyContactNumber?: string;
+ }
 
 export default function OFWProfiling() {
   const [showAddForm, setShowAddForm] = useState(false);
@@ -57,136 +56,8 @@ export default function OFWProfiling() {
   const [workerTypeFilter, setWorkerTypeFilter] = useState("all");
   const [countryFilter, setCountryFilter] = useState("all");
   const [selectedOFW, setSelectedOFW] = useState<OFWRecord | null>(null);
-  const [ofws, setOfws] = useState<OFWRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // Fetch OFW registrations from Django API on mount
-  useEffect(() => {
-    let cancelled = false;
-
-    async function fetchOFWs() {
-      try {
-        setLoading(true);
-        setError(null);
-        const res = await fetch("/api/ofw-registrations/");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const raw: unknown = await res.json();
-
-        if (!Array.isArray(raw)) return;
-
-        const transformed: OFWRecord[] = raw.map((item: Record<string, unknown>) => {
-          const first = (item.first_name as string) || "";
-          const last = (item.last_name as string) || "";
-          const owwaStatus = item.owwa_membership_status as string;
-          const country = item.country_of_deployment as string;
-          const workerType = item.worker_type as string;
-          const id = (item.client_id as string) || "";
-
-          return {
-            id,
-            firstName: first,
-            lastName: last,
-            name: `${last}, ${first}`.trim(),
-            profileType: "Individual Profile",
-            country: workerType === "Sea-based" && !country ? "International Waters" : country,
-            workerType: workerType === "Sea-based" || workerType === "Sea-based OFW (Seafarer)"
-              ? "Sea-based"
-              : "Land-based",
-            owwaStatus: owwaStatus as OFWRecord["owwaStatus"],
-            status: owwaStatus === "Active" || owwaStatus === "Expired"
-              ? owwaStatus === "Active"
-                ? "Active"
-                : "Pending"
-              : owwaStatus === "Not a Member"
-              ? "Pending"
-              : "Active",
-            statusColor:
-              owwaStatus === "Active"
-                ? "bg-green-100 text-green-700"
-                : owwaStatus === "Expired"
-                ? "bg-orange-100 text-orange-700"
-                : "bg-gray-100 text-gray-700",
-            avatar:
-              first && last
-                ? `${first.charAt(0)}${last.charAt(0)}`.toUpperCase()
-                : id.length >= 2
-                ? id.slice(0, 2).toUpperCase()
-                : "OF",
-            agency: item.recruitment_agency as string | undefined,
-            occupation: item.occupation_position as string | undefined,
-            contractStart: item.contract_start
-              ? new Date(item.contract_start as string).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : undefined,
-            contractExpiry: item.contract_end
-              ? new Date(item.contract_end as string).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : undefined,
-            birthDate: item.birth_date
-              ? new Date(item.birth_date as string).toISOString().split("T")[0]
-              : undefined,
-            formattedBirthDate: item.birth_date
-              ? new Date(item.birth_date as string).toLocaleDateString("en-US", {
-                  month: "long",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : undefined,
-            gender: item.gender as string | undefined,
-            civilStatus: item.civil_status as string | undefined,
-            nationality: item.nationality as string | undefined,
-            phoneNumber: item.phone_number as string | undefined,
-            email: item.email as string | undefined,
-            address: item.address as string | undefined,
-            membershipNumber: item.membership_number as string | undefined,
-            issueDate: item.issue_date
-              ? new Date(item.issue_date as string).toISOString().split("T")[0]
-              : undefined,
-            formattedIssueDate: item.issue_date
-              ? new Date(item.issue_date as string).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : undefined,
-            validityDate: item.validity_date
-              ? new Date(item.validity_date as string).toISOString().split("T")[0]
-              : undefined,
-            formattedValidityDate: item.validity_date
-              ? new Date(item.validity_date as string).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                  year: "numeric",
-                })
-              : undefined,
-            emergencyContactName: item.emergency_contact_name as string | undefined,
-            relationship: item.relationship as string | undefined,
-            emergencyContactNumber: item.emergency_contact_number as string | undefined,
-          };
-        });
-
-        if (!cancelled) setOfws(transformed);
-      } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load OFW records");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    fetchOFWs();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // Form state
+   // Form state
   const [formData, setFormData] = useState({
     // Personal Information
     lastName: "",
@@ -207,9 +78,9 @@ export default function OFWProfiling() {
     province: "",
     zipCode: "",
     
-    // Employment Details
-    workerType: "" as "land-based" | "sea-based" | "",
-    country: "",
+// Employment Details
+     workerType: "land-based" as "land-based" | "sea-based" | "",
+     country: "",
     city_abroad: "",
     occupation: "",
     jobTitle: "",
@@ -223,9 +94,9 @@ export default function OFWProfiling() {
     monthlyIncome: 0,
     currency: "USD",
     
-    // OWWA Membership
-    owwaMembershipStatus: "",
-    owwaMembershipNo: "",
+// OWWA Membership
+     owwaMembershipStatus: "active",
+     owwaMembershipNo: "",
     owwaValidityDate: "",
     
     // Emergency Contact
@@ -245,6 +116,127 @@ export default function OFWProfiling() {
     notes: ""
   });
 
+  // Helper to format date from YYYY-MM-DD to readable format
+  const formatDate = (dateStr?: string) => {
+    if (!dateStr) return "N/A";
+    try {
+      const d = new Date(dateStr);
+      return d.toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  // ── Scroll-lock refs: keep the main list's scroll position stable
+  //    across all modal open/close transitions so the page never "jumps to top".
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const savedScrollTopRef = useRef(0);
+  const isModalOpenRef = useRef(false);
+
+  // Capture scroll top whenever the scroll container is about to lose focus
+  // (i.e. a modal is opening) and restore it when the modal closes.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const onScroll = () => {
+      // Only capture when a modal is NOT open — if a modal IS open we never
+      // want to update the saved position from background scroll.
+      if (!isModalOpenRef.current) {
+        savedScrollTopRef.current = container.scrollTop;
+      }
+    };
+    container.addEventListener("scroll", onScroll, { passive: true });
+    return () => container.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // Watch for modal state changes: capture on open, restore on close.
+  // useLayoutEffect runs BEFORE paint so the restore is visible with zero flicker.
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const prevOpen = isModalOpenRef.current;
+    isModalOpenRef.current = showAddForm || showProfileDetails;
+
+    if (isModalOpenRef.current && !prevOpen) {
+      // Modal just opened — save the current scroll position before anything
+      // else in this render pass can shift the container.
+      savedScrollTopRef.current = container.scrollTop;
+    } else if (!isModalOpenRef.current && prevOpen) {
+      // Modal just closed — restore the scroll to the saved position.
+      requestAnimationFrame(() => {
+        container.scrollTop = savedScrollTopRef.current;
+      });
+    }
+    // Run once at mount so we pick up whatever scroll the page landed at.
+    if (!prevOpen) savedScrollTopRef.current = container.scrollTop;
+  }, [showAddForm, showProfileDetails]);
+
+  // Live OFW data from backend
+  const [ofws, setOfws] = useState<OFWRecord[]>([]);
+  const [ofwsLoading, setOfwsLoading] = useState(true);
+  const [editingOFWId, setEditingOFWId] = useState<string | null>(null);
+
+// Helpers – keep DRY and consistent across load + submit flows
+   const mapBackend = (r: any): OFWRecord => ({
+     id: String(r.client_id || r.id),
+     dbId: r.client_id || r.id, // client_id is the primary key
+     rawFirstName: r.first_name || "",
+     rawLastName: r.last_name || "",
+     name: `${r.last_name || ""}, ${r.first_name || ""}`.trim() || "—",
+     profileType: "Individual Profile",
+     country: r.country_of_deployment || r.country || "—",
+     workerType: (r.worker_type === "Sea-based" ? "Sea-based" : "Land-based") as "Land-based" | "Sea-based",
+     owwaStatus: (r.owwa_membership_status === "Active" ? "Active"
+       : r.owwa_membership_status === "Expired" ? "Expired"
+       : "N/A") as "Active" | "Expired" | "N/A",
+     status: "Active",
+     statusColor: "bg-green-100 text-green-700",
+     avatar: ((r as any).first_name?.[0] || "O") + ((r as any).last_name?.[0] || "F"),
+     agency: r.recruitment_agency || r.agency || undefined,
+     occupation: r.occupation_position || r.occupation || undefined,
+     contractExpiry: undefined,
+     birthDate: r.birth_date || undefined,
+     gender: r.gender || undefined,
+     civilStatus: r.civil_status || undefined,
+     nationality: r.nationality || "Filipino",
+     phone: r.phone_number || undefined,
+     email: r.email || undefined,
+     address: r.address || undefined,
+     contractStart: r.contract_start || undefined,
+     contractEnd: r.contract_end || undefined,
+     owwaMembershipNo: r.membership_number || undefined,
+     owwaValidityDate: r.validity_date || undefined,
+     emergencyContactName: r.emergency_contact_name || undefined,
+     emergencyRelationship: r.relationship || undefined,
+     emergencyContactNumber: r.emergency_contact_number || undefined,
+   });
+
+  const loadOFWs = async () => {
+    setOfwsLoading(true);
+    try {
+      const res: any = await getProfilingData();
+      // Axios response = { data: [...] } or { count, results: [...] } from
+      // Django REST Framework pagination – support both shapes.
+      const raw = (res as any)?.data ?? (res as any)?.results ?? [];
+      if (Array.isArray(raw) && raw.length > 0) {
+        setOfws(raw.map(mapBackend));
+      } else {
+        setOfws([]);
+      }
+    } catch (e) {
+      console.error("Failed to load OFW records:", e);
+      setOfws([]);
+    } finally {
+      setOfwsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOFWs();
+  }, []);
+
   const filteredOFWs = ofws.filter(ofw => {
     const matchesSearch = 
       ofw.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -260,33 +252,184 @@ export default function OFWProfiling() {
     setShowProfileDetails(true);
   };
 
-  const handleEditOFW = (ofw: OFWRecord) => {
-    setSelectedOFW(ofw);
-    // Populate form with OFW data
-    setFormData({
-      ...formData,
-      firstName: ofw.name.split(' ')[0] || '',
-      lastName: ofw.name.split(' ').slice(1).join(' ') || '',
-      country: ofw.country,
-      occupation: ofw.occupation || '',
-      agency: ofw.agency || '',
-      workerType: ofw.workerType.toLowerCase() as "land-based" | "sea-based" | "",
-    });
-    setShowAddForm(true);
-    toast.info(`Editing ${ofw.name}`);
-  };
+const handleEditOFW = (ofw: OFWRecord) => {
+     setSelectedOFW(ofw);
+     // Store the client_id (primary key) for the update endpoint URL
+     setEditingOFWId(String(ofw.dbId || ofw.id));
+     
+     // Country reverse mapping
+     const countryReverseMap: Record<string, string> = {
+       "Saudi Arabia": "saudi-arabia",
+       "UAE": "uae",
+       "Hong Kong": "hong-kong",
+       "Singapore": "singapore",
+       "Qatar": "qatar",
+       "International Waters": "international-waters",
+       "Others": "others",
+     };
 
-  const handleSaveDraft = () => {
+     // Relationship reverse mapping (Pascal Case to lowercase)
+     const relationshipReverseMap: Record<string, string> = {
+       "Spouse": "spouse",
+       "Parent": "parent",
+       "Sibling": "sibling",
+       "Child": "child",
+       "Others": "others",
+     };
+
+     // Use rawFirstName/rawLastName from mapped data if available, otherwise parse name
+     const firstName = ofw.rawFirstName || "";
+     const lastName = ofw.rawLastName || "";
+
+     setFormData({
+       firstName: firstName,
+       lastName: lastName,
+       middleName: "",
+       suffix: "",
+       birthDate: ofw.birthDate || "",
+       gender: ofw.gender || "",
+       civilStatus: ofw.civilStatus || "",
+       nationality: ofw.nationality || "Filipino",
+       contactNumber: ofw.phone || "",
+       email: ofw.email || "",
+       street: "",
+       barangay: "",
+       city: "",
+       province: "",
+       zipCode: "",
+       workerType: ofw.workerType.toLowerCase() as "land-based" | "sea-based" | "",
+       country: countryReverseMap[ofw.country] || ofw.country || "",
+       city_abroad: "",
+       occupation: ofw.occupation || "",
+       jobTitle: "",
+       agency: ofw.agency || "",
+       agencyLicenseNo: "",
+       contractStartDate: ofw.contractStart || "",
+       contractEndDate: ofw.contractEnd || "",
+       contractDuration: "",
+       monthlyIncome: 0,
+       currency: "USD",
+       owwaMembershipStatus: ofw.owwaStatus === "Active" ? "active" : ofw.owwaStatus === "Expired" ? "expired" : "not-member",
+       owwaMembershipNo: ofw.owwaMembershipNo || "",
+       owwaValidityDate: ofw.owwaValidityDate || "",
+       emergencyContactName: ofw.emergencyContactName || "",
+       emergencyRelationship: relationshipReverseMap[ofw.emergencyRelationship || ""] || ofw.emergencyRelationship || "",
+       emergencyContactNumber: ofw.emergencyContactNumber || "",
+       emergencyAddress: "",
+       vesselName: "",
+       vesselType: "",
+       rank: "",
+       seaServiceYears: 0,
+       skillsQualifications: [],
+       notes: "",
+     });
+     setShowAddForm(true);
+     toast.info(`Editing ${ofw.name}`);
+   };
+
+const handleSaveDraft = () => {
     console.log("Saving draft...", formData);
     toast.success("Draft saved successfully!");
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Submitting OFW profile...", formData);
-    toast.success("OFW profile created successfully!");
-    setShowAddForm(false);
-  };
+const handleSubmit = async (e: React.FormEvent) => {
+     e.preventDefault();
+     console.log("[handleSubmit] fired — formData:", formData);
+
+     // Validate required fields only for new records
+     if (!editingOFWId) {
+       if (!formData.firstName?.trim()) {
+         toast.error("First Name is required.");
+         return;
+       }
+       if (!formData.lastName?.trim()) {
+         toast.error("Last Name is required.");
+         return;
+       }
+     }
+
+     try {
+       // Map frontend dropdown values (lowercase-with-hyphens) → Django COUNTRY_CHOICES labels
+       const fCountry = formData.country || "";
+       const countryMap: Record<string, string> = {
+         "saudi-arabia": "Saudi Arabia",
+         "uae": "UAE",
+         "hong-kong": "Hong Kong",
+         "singapore": "Singapore",
+         "qatar": "Qatar",
+         "international-waters": "International Waters",
+         "others": "Others",
+       };
+       const countryOfDeployment = countryMap[fCountry] || formData.country || "Others";
+
+       // Determine worker type
+       const workerType = formData.workerType === "sea-based" ? "Sea-based" : "Land-based";
+       // Determine OWWA status
+       const owwaStatus = formData.owwaMembershipStatus === "active" ? "Active"
+         : formData.owwaMembershipStatus === "expired" ? "Expired"
+         : "Not a Member";
+
+       const relationshipMap: Record<string, string> = {
+         "spouse": "Spouse",
+         "parent": "Parent",
+         "sibling": "Sibling",
+         "child": "Child",
+         "others": "Others",
+       };
+       // Send relationship in expected format (Pascal Case)
+       const relationshipValue = relationshipMap[formData.emergencyRelationship] || "Others";
+
+// Build payload - include required fields with fallback to selectedOFW raw values for editing
+       const basePayload: Record<string, string> = {
+         first_name: formData.firstName?.trim() || selectedOFW?.rawFirstName?.trim() || "",
+         last_name: formData.lastName?.trim() || selectedOFW?.rawLastName?.trim() || "",
+         worker_type: workerType,
+         country_of_deployment: countryOfDeployment || "Others",
+         occupation_position: formData.occupation?.trim() || selectedOFW?.occupation?.trim() || "",
+         owwa_membership_status: owwaStatus,
+         emergency_contact_name: formData.emergencyContactName?.trim() || selectedOFW?.emergencyContactName?.trim() || "",
+         relationship: relationshipValue,
+         emergency_contact_number: formData.emergencyContactNumber?.trim() || selectedOFW?.emergencyContactNumber?.trim() || "",
+       };
+       // Optional fields
+       if (formData.middleName?.trim()) basePayload.middle_name = formData.middleName.trim();
+       if (formData.birthDate?.trim()) basePayload.birth_date = formData.birthDate.trim();
+       if (formData.gender) basePayload.gender = formData.gender;
+       if (formData.civilStatus) basePayload.civil_status = formData.civilStatus;
+       if (formData.nationality) basePayload.nationality = formData.nationality;
+       if (formData.contactNumber?.trim()) basePayload.phone_number = formData.contactNumber.trim();
+       if (formData.email?.trim()) basePayload.email = formData.email.trim();
+       if (formData.agency?.trim()) basePayload.recruitment_agency = formData.agency.trim();
+
+if (editingOFWId) {
+          // UPDATE existing record - include client_id in payload (required by DRF serializer)
+          const fullPayload = { ...basePayload, client_id: editingOFWId };
+          console.log("[handleSubmit] PUT payload for client_id:", editingOFWId, "->", fullPayload);
+          const result: any = await updateClientProfile(editingOFWId, fullPayload);
+          console.log("[handleSubmit] PUT ok — result:", result?.data ?? result);
+          toast.success("OFW profile updated successfully!");
+        } else {
+         // CREATE new record
+         const initials = `${(formData.firstName?.[0] || "O")}${(formData.lastName?.[0] || "F")}`.toUpperCase();
+         const clientId = `${initials}-${Date.now()}`;
+         const fullPayload = { ...basePayload, client_id: clientId };
+         console.log("[handleSubmit] POST payload:", fullPayload);
+         const result: any = await saveClientProfile(fullPayload);
+         console.log("[handleSubmit] POST ok — result:", result?.data ?? result);
+         toast.success("OFW profile created successfully!");
+       }
+       // Reset form and state
+       setShowAddForm(false);
+       setEditingOFWId(null);
+       setSelectedOFW(null);
+       await loadOFWs();
+     } catch (err: any) {
+       const status = err?.response?.status ?? "network";
+       const detail = err?.response?.data?.message || err?.response?.data?.detail || JSON.stringify(err?.response?.data ?? err.message);
+       console.error("[handleSubmit] FAILED — status:", status, "body:", err?.response?.data ?? err.message);
+       toast.error(`Save failed: ${detail}`);
+     }
+   };
 
   // Profile Details View - Modal Design
   if (showProfileDetails && selectedOFW) {
@@ -359,7 +502,7 @@ export default function OFWProfiling() {
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Birth Date:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedBirthDate || "N/A"}</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{formatDate(selectedOFW.birthDate)}</span>
                     </div>
                     <div className="text-sm flex justify-between">
                       <span className="text-gray-600" style={{ fontWeight: 400 }}>Gender:</span>
@@ -382,7 +525,7 @@ export default function OFWProfiling() {
                   <div className="space-y-3">
                     <div className="flex items-center gap-3 text-sm">
                       <User className="size-4 text-gray-400" />
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.phoneNumber || "N/A"}</span>
+                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.phone || "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm">
                       <MapPin className="size-4 text-gray-400" />
@@ -396,80 +539,80 @@ export default function OFWProfiling() {
                 </div>
               </div>
 
-              {/* Employment Details */}
-              <div className="mb-8 pb-8 border-b border-gray-200">
-                <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>Employment Details</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Worker Type:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.workerType}</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Country:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.country}</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Occupation:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.occupation || "N/A"}</span>
-                  </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Agency:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.agency || "N/A"}</span>
-                  </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract Start:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.contractStart || "N/A"}</span>
-                    </div>
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract End:</span>
-                    <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.contractExpiry || "N/A"}</span>
-                  </div>
-                </div>
-              </div>
+{/* Employment Details */}
+               <div className="mb-8 pb-8 border-b border-gray-200">
+                 <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>Employment Details</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Worker Type:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.workerType}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Country:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.country}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Occupation:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.occupation || "N/A"}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Agency:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.agency || "N/A"}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract Start:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{formatDate(selectedOFW.contractStart)}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Contract End:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{formatDate(selectedOFW.contractEnd)}</span>
+                   </div>
+                 </div>
+               </div>
 
-              {/* OWWA Membership */}
-              <div className="mb-8 pb-8 border-b border-gray-200">
-                <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>OWWA Membership Status</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="text-sm flex justify-between">
-                    <span className="text-gray-600" style={{ fontWeight: 400 }}>Status:</span>
-                    <Badge className={selectedOFW.owwaStatus === "Active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"} style={{ fontWeight: 500 }}>
-                      {selectedOFW.owwaStatus}
-                    </Badge>
-                  </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Membership No.:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.membershipNumber || "N/A"}</span>
-                    </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Issue Date:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedIssueDate || "N/A"}</span>
-                    </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Validity Date:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.formattedValidityDate || "N/A"}</span>
-                    </div>
-                </div>
-              </div>
+               {/* OWWA Membership */}
+               <div className="mb-8 pb-8 border-b border-gray-200">
+                 <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>OWWA Membership Status</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Status:</span>
+                     <Badge className={selectedOFW.owwaStatus === "Active" ? "bg-green-100 text-green-700" : "bg-orange-100 text-orange-700"} style={{ fontWeight: 500 }}>
+                       {selectedOFW.owwaStatus}
+                     </Badge>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Membership No.:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.owwaMembershipNo || "N/A"}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Issue Date:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{formatDate(selectedOFW.contractStart)}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Validity Date:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{formatDate(selectedOFW.owwaValidityDate)}</span>
+                   </div>
+                 </div>
+               </div>
 
-              {/* Emergency Contact */}
-              <div className="mb-8">
-                <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>Emergency Contact</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Name:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactName || "N/A"}</span>
-                    </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Relationship:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.relationship || "N/A"}</span>
-                    </div>
-                    <div className="text-sm flex justify-between">
-                      <span className="text-gray-600" style={{ fontWeight: 400 }}>Contact Number:</span>
-                      <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactNumber || "N/A"}</span>
-                    </div>
-                </div>
-              </div>
+               {/* Emergency Contact */}
+               <div className="mb-8">
+                 <h3 className="text-sm text-gray-500 uppercase tracking-wide mb-4" style={{ fontWeight: 600 }}>Emergency Contact</h3>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Name:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactName || "N/A"}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Relationship:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyRelationship || "N/A"}</span>
+                   </div>
+                   <div className="text-sm flex justify-between">
+                     <span className="text-gray-600" style={{ fontWeight: 400 }}>Contact Number:</span>
+                     <span className="text-gray-900" style={{ fontWeight: 400 }}>{selectedOFW.emergencyContactNumber || "N/A"}</span>
+                   </div>
+                 </div>
+               </div>
 
               {/* Supporting Documents */}
               <div className="mb-6">
@@ -521,13 +664,21 @@ export default function OFWProfiling() {
   }
 
   const OFWFormModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowAddForm(false)}>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => {
+      setShowAddForm(false);
+      setEditingOFWId(null);
+      setSelectedOFW(null);
+    }}>
       <Card className="bg-white max-w-4xl w-full max-h-[90vh] overflow-hidden rounded-xl shadow-2xl" onClick={(e) => e.stopPropagation()}>
         <CardContent className="p-0">
           {/* Header */}
           <div className="bg-gray-50 border-b border-gray-200 px-8 py-6 relative">
             <button
-              onClick={() => setShowAddForm(false)}
+              onClick={() => {
+                setShowAddForm(false);
+                setEditingOFWId(null);
+                setSelectedOFW(null);
+              }}
               className="absolute top-3 left-4 size-8 rounded-lg hover:bg-gray-100 flex items-center justify-center transition-colors"
             >
               <X className="size-5 text-gray-600" />
@@ -540,88 +691,184 @@ export default function OFWProfiling() {
             </p>
           </div>
 
-          {/* Form Content */}
-          <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)]">
-            <form onSubmit={handleSubmit} className="space-y-5">
-              {/* Client Profiling Search */}
-              <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
-                <ClientSearchWidget />
-              </div>
-
-              {/* Employment Details */}
-              <div className="bg-purple-50 p-6 rounded-lg border-l-4 border-l-purple-500">
-                <div className="flex items-center gap-3 mb-5">
-                  <div className="size-10 bg-purple-100 rounded-lg flex items-center justify-center">
-                    <Globe className="size-5 text-purple-600" />
+{/* Form Content */}
+           <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor">
+             <form onSubmit={handleSubmit} className="space-y-5">
+{/* Personal Information */}
+                <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-l-blue-500">
+                  <div className="flex items-center gap-3 mb-5">
+                    <div className="size-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                      <User className="size-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Personal Information</h3>
+                      <p className="text-sm text-gray-600">Worker's basic details</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Employment Details</h3>
-                    <p className="text-sm text-gray-600">Overseas work information</p>
-                  </div>
-                </div>
-
-              <div className="space-y-5">
-                <FormField 
-                  label="Worker Type" 
-                  required
-                  helperText="Select whether land-based or sea-based worker"
-                >
-                  <RadioGroup
-                    name="workerType"
-                    value={formData.workerType}
-                    onChange={(value) => setFormData({...formData, workerType: value as "land-based" | "sea-based"})}
-                    options={[
-                      { 
-                        value: "land-based", 
-                        label: "Land-based OFW",
-                        description: "Working in factories, offices, homes, etc."
-                      },
-                      { 
-                        value: "sea-based", 
-                        label: "Sea-based OFW (Seafarer)",
-                        description: "Working on ships, vessels, maritime industry"
-                      }
-                    ]}
-                  />
-                </FormField>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  <FormField label="Country of Deployment" required>
+                  <FormField label="First Name" required>
+                    <TextInput
+                      placeholder="Given name"
+                      value={formData.firstName}
+                      onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+                      required
+                    />
+                  </FormField>
+
+                  <FormField label="Last Name" required>
+                    <TextInput
+                      placeholder="Family surname"
+                      value={formData.lastName}
+                      onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+                      required
+                    />
+                  </FormField>
+
+                  <FormField label="Birth Date">
+                    <DateInput
+                      value={formData.birthDate}
+                      onChange={(e) => setFormData({...formData, birthDate: e.target.value})}
+                    />
+                  </FormField>
+
+                  <FormField label="Gender">
                     <SelectInput
                       options={[
-                        { value: "saudi-arabia", label: "Saudi Arabia" },
-                        { value: "uae", label: "United Arab Emirates" },
-                        { value: "hong-kong", label: "Hong Kong" },
-                        { value: "singapore", label: "Singapore" },
-                        { value: "qatar", label: "Qatar" },
-                        { value: "international-waters", label: "International Waters (Sea-based)" }
+                        { value: "Male", label: "Male" },
+                        { value: "Female", label: "Female" },
+                        { value: "Other", label: "Other" }
                       ]}
-                      value={formData.country}
-                      onChange={(e) => setFormData({...formData, country: e.target.value})}
-                      required
+                      value={formData.gender}
+                      onChange={(e) => setFormData({...formData, gender: e.target.value})}
                     />
                   </FormField>
 
-                  <FormField label="Occupation/Position" required>
-                    <TextInput
-                      placeholder="e.g., Domestic Helper, Nurse, Seaman"
-                      value={formData.occupation}
-                      onChange={(e) => setFormData({...formData, occupation: e.target.value})}
-                      required
+                  <FormField label="Civil Status">
+                    <SelectInput
+                      options={[
+                        { value: "Single", label: "Single" },
+                        { value: "Married", label: "Married" },
+                        { value: "Divorced", label: "Divorced" },
+                        { value: "Widowed", label: "Widowed" },
+                        { value: "Separated", label: "Separated" }
+                      ]}
+                      value={formData.civilStatus}
+                      onChange={(e) => setFormData({...formData, civilStatus: e.target.value})}
                     />
                   </FormField>
 
-                  <FormField label="Recruitment Agency" required>
-                    <TextInput
-                      placeholder="POEA-licensed agency"
-                      value={formData.agency}
-                      onChange={(e) => setFormData({...formData, agency: e.target.value})}
-                      required
+                  <FormField label="Nationality">
+                    <SelectInput
+                      options={[
+                        { value: "Filipino", label: "Filipino" },
+                        { value: "American", label: "American" },
+                        { value: "Chinese", label: "Chinese" },
+                        { value: "Japanese", label: "Japanese" },
+                        { value: "Korean", label: "Korean" },
+                        { value: "Indian", label: "Indian" }
+                      ]}
+                      value={formData.nationality}
+                      onChange={(e) => setFormData({...formData, nationality: e.target.value})}
                     />
                   </FormField>
                 </div>
-              </div>
-            </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mt-5">
+                  <FormField label="Contact Number">
+                    <TextInput
+                      type="tel"
+                      placeholder="e.g., 09123456789"
+                      value={formData.contactNumber}
+                      onChange={(e) => setFormData({...formData, contactNumber: e.target.value})}
+                    />
+                  </FormField>
+
+                  <FormField label="Email">
+                    <TextInput
+                      type="email"
+                      placeholder="email@example.com"
+                      value={formData.email}
+                      onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    />
+                  </FormField>
+                </div>
+                </div>
+
+               {/* Employment Details */}
+               <div className="bg-purple-50 p-6 rounded-lg border-l-4 border-l-purple-500">
+                 <div className="flex items-center gap-3 mb-5">
+                   <div className="size-10 bg-purple-100 rounded-lg flex items-center justify-center">
+                     <Globe className="size-5 text-purple-600" />
+                   </div>
+                   <div>
+                     <h3 className="text-lg font-semibold text-gray-900">Employment Details</h3>
+                     <p className="text-sm text-gray-600">Overseas work information</p>
+                   </div>
+                 </div>
+
+               <div className="space-y-5">
+                 <FormField 
+                   label="Worker Type" 
+                   required
+                   helperText="Select whether land-based or sea-based worker"
+                 >
+                   <RadioGroup
+                     name="workerType"
+                     value={formData.workerType}
+                     onChange={(value) => setFormData({...formData, workerType: value as "land-based" | "sea-based"})}
+                     options={[
+                       { 
+                         value: "land-based", 
+                         label: "Land-based OFW",
+                         description: "Working in factories, offices, homes, etc."
+                       },
+                       { 
+                         value: "sea-based", 
+                         label: "Sea-based OFW (Seafarer)",
+                         description: "Working on ships, vessels, maritime industry"
+                       }
+                     ]}
+                   />
+                 </FormField>
+
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <FormField label="Country of Deployment" required>
+                     <SelectInput
+                       options={[
+                         { value: "saudi-arabia", label: "Saudi Arabia" },
+                         { value: "uae", label: "United Arab Emirates" },
+                         { value: "hong-kong", label: "Hong Kong" },
+                         { value: "singapore", label: "Singapore" },
+                         { value: "qatar", label: "Qatar" },
+                         { value: "international-waters", label: "International Waters (Sea-based)" },
+                         { value: "others", label: "Others" }
+                       ]}
+                       value={formData.country}
+                       onChange={(e) => setFormData({...formData, country: e.target.value})}
+                       required
+                     />
+                   </FormField>
+
+                   <FormField label="Occupation/Position" required>
+                     <TextInput
+                       placeholder="e.g., Domestic Helper, Nurse, Seaman"
+                       value={formData.occupation}
+                       onChange={(e) => setFormData({...formData, occupation: e.target.value})}
+                       required
+                     />
+                   </FormField>
+
+                   <FormField label="Recruitment Agency">
+                     <TextInput
+                       placeholder="POEA-licensed agency"
+                       value={formData.agency}
+                       onChange={(e) => setFormData({...formData, agency: e.target.value})}
+                     />
+                   </FormField>
+                 </div>
+               </div>
+             </div>
 
               {/* OWWA Membership */}
               <div className="bg-orange-50 p-6 rounded-lg border-l-4 border-l-orange-500">
@@ -689,40 +936,38 @@ export default function OFWProfiling() {
                   </div>
                 </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <FormField label="Emergency Contact Name" required>
-                  <TextInput
-                    placeholder="Full name"
-                    value={formData.emergencyContactName}
-                    onChange={(e) => setFormData({...formData, emergencyContactName: e.target.value})}
-                    required
-                  />
-                </FormField>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                 <FormField label="Emergency Contact Name">
+                   <TextInput
+                     placeholder="Full name"
+                     value={formData.emergencyContactName}
+                     onChange={(e) => setFormData({...formData, emergencyContactName: e.target.value})}
+                   />
+                 </FormField>
 
-                <FormField label="Relationship" required>
-                  <SelectInput
-                    options={[
-                      { value: "spouse", label: "Spouse" },
-                      { value: "parent", label: "Parent" },
-                      { value: "sibling", label: "Sibling" },
-                      { value: "child", label: "Child" }
-                    ]}
-                    value={formData.emergencyRelationship}
-                    onChange={(e) => setFormData({...formData, emergencyRelationship: e.target.value})}
-                    required
-                  />
-                </FormField>
+                 <FormField label="Relationship">
+                   <SelectInput
+                     options={[
+                       { value: "spouse", label: "Spouse" },
+                       { value: "parent", label: "Parent" },
+                       { value: "sibling", label: "Sibling" },
+                       { value: "child", label: "Child" },
+                       { value: "others", label: "Others" }
+                     ]}
+                     value={formData.emergencyRelationship}
+                     onChange={(e) => setFormData({...formData, emergencyRelationship: e.target.value})}
+                   />
+                 </FormField>
 
-                <FormField label="Emergency Contact Number" required>
-                  <TextInput
-                    type="tel"
-                    placeholder="e.g., 09123456789"
-                    value={formData.emergencyContactNumber}
-                    onChange={(e) => setFormData({...formData, emergencyContactNumber: e.target.value})}
-                    required
-                  />
-                </FormField>
-              </div>
+                 <FormField label="Emergency Contact Number">
+                   <TextInput
+                     type="tel"
+                     placeholder="e.g., 09123456789"
+                     value={formData.emergencyContactNumber}
+                     onChange={(e) => setFormData({...formData, emergencyContactNumber: e.target.value})}
+                   />
+                 </FormField>
+               </div>
             </div>
 
             </form>
@@ -734,7 +979,11 @@ export default function OFWProfiling() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowAddForm(false)}
+                onClick={() => {
+                  setShowAddForm(false);
+                  setEditingOFWId(null);
+                  setSelectedOFW(null);
+                }}
                 className="hover:bg-gray-50 transition-colors"
               >
                 Cancel
@@ -749,12 +998,12 @@ export default function OFWProfiling() {
                 Save Draft
               </Button>
               <Button
-                type="submit"
+                type="button"
                 onClick={handleSubmit}
                 className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white gap-2 transition-colors"
               >
                 <Check className="size-4" />
-                Save Profile
+                {editingOFWId ? "Update Profile" : "Save Profile"}
               </Button>
             </div>
           </div>
@@ -769,7 +1018,7 @@ export default function OFWProfiling() {
 
   // Main List View
   return (
-    <div className="h-full bg-gray-50 overflow-y-auto">
+    <div className="h-full bg-gray-50 overflow-y-auto" ref={scrollContainerRef}>
       <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-4 space-y-4">
         {/* Search and Filters - Simplified without More Filters */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 space-y-4">
@@ -855,25 +1104,7 @@ export default function OFWProfiling() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {loading ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center">
-                      <Activity className="size-10 text-blue-500 mx-auto mb-3 animate-spin" />
-                      <p className="text-gray-500" style={{ fontWeight: 400 }}>Loading OFW records…</p>
-                    </td>
-                  </tr>
-                ) : error ? (
-                  <tr>
-                    <td colSpan={6} className="px-6 py-16 text-center">
-                      <AlertCircle className="size-10 text-red-500 mx-auto mb-3" />
-                      <p className="text-gray-700 mb-2" style={{ fontWeight: 500 }}>Failed to load OFW records</p>
-                      <p className="text-gray-500 text-sm mb-4" style={{ fontWeight: 400 }}>{error}</p>
-                      <Button variant="outline" onClick={() => window.location.reload()} className="gap-2">
-                        Retry
-                      </Button>
-                    </td>
-                  </tr>
-                ) : filteredOFWs.length === 0 ? (
+                {filteredOFWs.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="px-6 py-12 text-center">
                       <div className="flex flex-col items-center gap-2">
