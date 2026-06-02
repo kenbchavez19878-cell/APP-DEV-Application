@@ -657,7 +657,7 @@ if (editingOFWId) {
   }
 
   const OFWFormModal = () => (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => {
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-4" onClick={() => {
       setShowAddForm(false);
       setEditingOFWId(null);
       setSelectedOFW(null);
@@ -685,12 +685,12 @@ if (editingOFWId) {
           </div>
 
 {/* Form Content */}
-           <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor">
-             <form onSubmit={handleSubmit} className="space-y-5">
-               {/* Client Profiling Search */}
-               <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
-                 <ClientSearchWidget />
-               </div>
+            <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)]" style={{ overflowAnchor: "none" }}>
+              <form onSubmit={handleSubmit} className="space-y-5">
+                {/* Client Profiling Search */}
+                <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
+                  <ClientSearchWidget />
+                </div>
 
                {/* Personal Information */}
                <div className="bg-blue-50 p-6 rounded-lg border-l-4 border-l-blue-500">
