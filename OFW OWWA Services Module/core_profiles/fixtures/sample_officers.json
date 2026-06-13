@@ -1,0 +1,40 @@
+[
+  {
+    "model": "core_profiles.owwaofficerprofile",
+    "pk": "RD-NCR-001",
+    "fields": {
+      "client_id": "RD-NCR-001",
+      "full_name": "Maria Santos",
+      "email": "m.santos@owwa.gov.ph",
+      "office_phone": "02-8888-1234",
+      "mobile_phone": "0917-123-4567",
+      "role_position": "Regional Director",
+      "specialty_focus_area": "Administration",
+      "assigned_region": "ncr",
+      "assigned_province": "",
+      "assigned_city": "",
+      "start_date": "2020-01-15",
+      "employment_status": "Permanent",
+      "office_address": "OWWWA National Office, Makati City"
+    }
+  },
+  {
+    "model": "core_profiles.owwaofficerprofile",
+    "pk": "WO-001",
+    "fields": {
+      "client_id": "WO-001",
+      "full_name": "Juan Dela Cruz",
+      "email": "j.delacruz@owwa.gov.ph",
+      "office_phone": "052-888-5678",
+      "mobile_phone": "0918-987-6543",
+      "role_position": "Welfare Officer",
+      "specialty_focus_area": "Repatriation",
+      "assigned_region": "region-5",
+      "assigned_province": "albay",
+      "assigned_city": "",
+      "start_date": "2022-06-10",
+      "employment_status": "Permanent",
+      "office_address": "OWWWA Regional Office, Legazpi City, Albay"
+    }
+  }
+]

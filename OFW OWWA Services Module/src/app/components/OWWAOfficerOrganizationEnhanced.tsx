@@ -15,7 +15,7 @@ import {
 import { toast } from "sonner";
 import { ClientSearchWidget } from "./ClientSearchWidget";
 import {
-  getOfficerProfiles, addOfficerProfile,
+  getOfficerProfiles, addOfficerProfile, updateOfficerProfile,
 } from "../../api/clientApi";
 
 interface OWWAOfficer {
@@ -30,6 +30,7 @@ interface OWWAOfficer {
   statusColor: string;
   specialty?: string;
   startDate?: string;
+  officeAddress?: string;
 }
 
 export function OWWAOfficerOrganization() {
@@ -59,11 +60,12 @@ export function OWWAOfficerOrganization() {
     notes: ""
   });
 
-  // Officers – loaded from backend on mount, updated via API calls
-  const [officers, setOfficers] = useState<OWWAOfficer[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
-  const [loadError, setLoadError] = useState<string>("");
+// Officers – loaded from backend on mount, updated via API calls
+   const [officers, setOfficers] = useState<OWWAOfficer[]>([]);
+   const [isLoading, setIsLoading] = useState(true);
+   const [isSaving, setIsSaving] = useState(false);
+   const [loadError, setLoadError] = useState<string>("");
+   const [editingOfficerId, setEditingOfficerId] = useState<string | null>(null);
 
   // Load all officers from the Django backend on every mount/resume
   useEffect(() => {
@@ -163,6 +165,7 @@ export function OWWAOfficerOrganization() {
 
   const handleEditOfficer = (officer: OWWAOfficer) => {
     setSelectedOfficer(officer);
+    setEditingOfficerId(officer.id);
 
     // Reverse-lookup: human-readable area → region key
     const getRegionFromArea = (area: string): string => {
@@ -173,17 +176,18 @@ export function OWWAOfficerOrganization() {
       return "";
     };
 
-    const areaParts = officer.assignedArea.split(",").map(p => p.trim());
+const areaParts = officer.assignedArea.split(",").map(p => p.trim());
     setFormData({
       ...formData,
       fullName: officer.name,
       email: officer.email,
       mobilePhone: officer.phone,
       role: officer.role.toLowerCase().replace(' ', '-'),
-      specialty: officer.specialty?.toLowerCase() || '',
+      specialty: officer.specialty ? (reverseSpecialtyLabel[officer.specialty.toLowerCase()] || officer.specialty.toLowerCase().replace(' ', '-')) : '',
       assignedRegion: getRegionFromArea(officer.assignedArea),
       assignedProvince: areaParts[1] || "",
       assignedCity: areaParts[2] || "",
+      officeAddress: officer.officeAddress || "",
     });
     setShowAddForm(true);
     toast.info(`Editing ${officer.name}`);
@@ -235,6 +239,28 @@ export function OWWAOfficerOrganization() {
     probationary: "Probationary",
   };
 
+  const reverseSpecialtyLabel: Record<string, string> = Object.fromEntries(
+    Object.entries(specialtyLabel).map(([k, v]) => [v.toLowerCase(), k])
+  );
+
+  const toSlug = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/ñ/g, 'n')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '');
+
+  const handleCloseModal = () => {
+    setShowAddForm(false);
+    setEditingOfficerId(null);
+    setFormData({
+      fullName: "", email: "", officePhone: "", mobilePhone: "",
+      role: "", specialty: "", assignedRegion: "", assignedProvince: "",
+      assignedCity: "", officeAddress: "", employeeId: "", startDate: "",
+      employmentStatus: "", responsibilities: [], notes: "",
+    });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -280,15 +306,17 @@ export function OWWAOfficerOrganization() {
     const specialtyStr   = formData.specialty
       ? (specialtyLabel[formData.specialty] || toLabel(formData.specialty))
       : "";
+    const provinceSlug   = formData.assignedProvince ? toSlug(formData.assignedProvince) : "";
+    const citySlug       = formData.assignedCity ? toSlug(formData.assignedCity) : "";
     // Payload sent to the Django backend (uses label/display values per model choices)
     const payload: Record<string, any> = {
-      client_id:              newClientId,
+      client_id:              editingOfficerId || newClientId,
       full_name:              fullName,
       role_position:          roleDisplay,
       specialty_focus_area:   specialtyStr,
       assigned_region:        formData.assignedRegion,
-      assigned_province:      formData.assignedProvince || "",
-      assigned_city:          formData.assignedCity || "",
+      assigned_province:      provinceSlug,
+      assigned_city:          citySlug,
       start_date:             formData.startDate,
       employment_status:      statusLabel[formData.employmentStatus] || formData.employmentStatus,
       office_address:         formData.officeAddress.trim(),
@@ -300,7 +328,11 @@ export function OWWAOfficerOrganization() {
 
     setIsSaving(true);
     try {
-      await addOfficerProfile(payload);
+      if (editingOfficerId) {
+        await updateOfficerProfile(editingOfficerId, payload);
+      } else {
+        await addOfficerProfile(payload);
+      }
 
       // Refresh the list from the backend so all in-flight mutations are reflected
       const fresh = await getOfficerProfiles();
@@ -316,10 +348,11 @@ export function OWWAOfficerOrganization() {
         statusColor:  r.statusColor,
         specialty:    r.specialty || undefined,
         startDate:    r.startDate || undefined,
+        officeAddress: r.office_address || undefined,
       }));
       setOfficers(mapped);
-      toast.success("OWWA officer added successfully!");
-      setShowAddForm(false);
+      toast.success(editingOfficerId ? "OWWA officer updated successfully!" : "OWWA officer added successfully!");
+      handleCloseModal();
     } catch (err: any) {
       console.error("Failed to create officer profile:", err);
       const msg = err?.response?.data
@@ -512,17 +545,17 @@ export function OWWAOfficerOrganization() {
             >
               <X className="size-5 text-gray-600" />
             </button>
-            <h2 className="text-2xl text-gray-900 mb-1">
-              Add New OWWA Officer
-            </h2>
-            <p className="text-gray-600 text-sm">
-              Fill in the information to register a new OWWA officer
-            </p>
-          </div>
+<h2 className="text-2xl text-gray-900 mb-1">
+               {editingOfficerId ? "Edit OWWA Officer" : "Add New OWWA Officer"}
+             </h2>
+             <p className="text-gray-600 text-sm">
+               {editingOfficerId ? "Update the officer information" : "Fill in the information to register a new OWWA officer"}
+             </p>
+           </div>
 
-          {/* Form Content */}
-          <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor">
-            <form onSubmit={handleSubmit} className="space-y-6">
+{/* Form Content */}
+          <form onSubmit={handleSubmit}>
+            <div className="p-8 overflow-y-auto max-h-[calc(90vh-180px)] no-overflow-anchor space-y-6">
               {/* Client Profiling Search */}
               <div className="bg-blue-50 border-l-4 border-l-blue-500 rounded-lg p-5">
                 <ClientSearchWidget />
@@ -540,28 +573,48 @@ export function OWWAOfficerOrganization() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-<FormField label="Full Name *" required helperText="Enter full name as shown on official documents">
-                    <TextInput
-                      placeholder="officer@owwa.gov.ph"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
-                    />
-                  </FormField>
+<div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                   <FormField label="Full Name *" required helperText="Enter full name as shown on official documents">
+                     <TextInput
+                       placeholder="Juan Dela Cruz"
+                       value={formData.fullName}
+                       onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
+                       required
+                       className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
+                     />
+                   </FormField>
 
-                  <FormField label="Email Address" required>
-                    <TextInput
-                      type="email"
-                      placeholder="officer@owwa.gov.ph"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      required
-                      className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
-                    />
-                  </FormField>
-                </div>
+<FormField label="Email Address" required>
+                     <TextInput
+                       type="email"
+                       placeholder="officer@owwa.gov.ph"
+                       value={formData.email}
+                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                       required
+                       className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
+                     />
+                   </FormField>
+
+                   <FormField label="Mobile Phone">
+                     <TextInput
+                       type="tel"
+                       placeholder="09XX XXX XXXX"
+                       value={formData.mobilePhone}
+                       onChange={(e) => setFormData({ ...formData, mobilePhone: e.target.value })}
+                       className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
+                     />
+                   </FormField>
+
+                   <FormField label="Office Phone">
+                     <TextInput
+                       type="tel"
+                       placeholder="(02) XXX XXXX"
+                       value={formData.officePhone}
+                       onChange={(e) => setFormData({ ...formData, officePhone: e.target.value })}
+                       className="bg-white border-purple-200 focus:border-purple-500 focus:ring-2 focus:ring-purple-100/30 h-11"
+                     />
+                   </FormField>
+                 </div>
               </div>
 
               {/* Position Details */}
@@ -705,53 +758,53 @@ export function OWWAOfficerOrganization() {
                   </div>
                 </div>
 
-                <FormField label="Notes / Remarks">
-                  <TextArea
-                    placeholder="Any additional information..."
-                    value={formData.notes}
-                    onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                    className="bg-white border-gray-300 focus:border-gray-500 focus:ring-2 focus:ring-gray-100/30"
-                  />
-                </FormField>
+<FormField label="Notes / Remarks">
+                    <TextArea
+                      placeholder="Any additional information..."
+                      value={formData.notes}
+                      onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                      className="bg-white border-gray-300 focus:border-gray-500 focus:ring-2 focus:ring-gray-100/30"
+                    />
+</FormField>
               </div>
-            </form>
-          </div>
-
-          {/* Footer */}
-          <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
-            <div className="flex gap-3 justify-end">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowAddForm(false)}
-                className="hover:bg-gray-50 transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleSaveDraft}
-                disabled={isSaving}
-                className="gap-2 hover:bg-gray-50 transition-colors"
-              >
-                <Save className="size-4" />
-                Save Draft
-              </Button>
-              <Button
-                onClick={handleSubmit}
-                disabled={isSaving}
-                className={`gap-2 transition-colors ${
-                  isSaving
-                    ? 'bg-blue-400 cursor-not-allowed opacity-70'
-                    : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white'
-                }`}
-              >
-                <Check className="size-4" />
-                {isSaving ? 'Saving…' : 'Add Officer'}
-              </Button>
             </div>
-          </div>
+
+            {/* Footer */}
+            <div className="border-t border-gray-200 bg-gray-50 px-6 py-4">
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleCloseModal}
+                  className="hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleSaveDraft}
+                  disabled={isSaving}
+                  className="gap-2 hover:bg-gray-50 transition-colors"
+                >
+                  <Save className="size-4" />
+                  Save Draft
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className={`gap-2 transition-colors ${
+                    isSaving
+                      ? 'bg-blue-400 cursor-not-allowed opacity-70'
+                      : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white'
+                  }`}
+                >
+                  <Check className="size-4" />
+                  {isSaving ? 'Saving…' : editingOfficerId ? 'Update Officer' : 'Add Officer'}
+                </Button>
+              </div>
+            </div>
+          </form>
         </CardContent>
       </Card>
     </div>

@@ -98,12 +98,12 @@ const roleLabelMap: Record<string, string> = {
   "Legal Officer":      "Legal Officer",
 };
 const specialtyLabelMap: Record<string, string> = {
-  "Repatriation Services":  "Repatriation Services",
-  "Legal Assistance":       "Legal Assistance",
-  "Crisis Response":        "Crisis Response",
-  "Medical Assistance":     "Medical Assistance",
-  "Administration":         "Administration",
-  "Documentation":          "Documentation",
+  repatriation: "Repatriation Services",
+  legal: "Legal Assistance",
+  crisis: "Crisis Response",
+  medical: "Medical Assistance",
+  admin: "Administration",
+  documentation: "Documentation",
 };
 const regionLabelMap: Record<string, string> = {
   "region-1":  "Region I (Ilocos Region)",
